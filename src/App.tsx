@@ -99,7 +99,7 @@ function App() {
 
         <section className="section-block container" id="why-join">
           <div className="section-heading">
-            <p className="eyebrow">More than a hackathon</p>
+            <p className="eyebrow">More than a hackathon Test</p>
             <h2>Bring a question.<br />Leave with momentum.</h2>
           </div>
           <div className="feature-grid">
