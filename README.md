@@ -1,6 +1,7 @@
 # Owl Hacks 2026
 
-React website and username/password backend for Owl Hacks 2026.
+Beacon is a React dashboard and username/password backend for a smart-light
+alert system designed for deaf and hard-of-hearing users.
 
 ## Development
 
@@ -59,5 +60,7 @@ curl -i -X POST -b /tmp/owlhacks-cookies.txt http://localhost:3001/api/auth/logo
 ```
 
 Authentication is available under `/api/auth` and uses an HTTP-only session
-cookie. For a production-style local server, use `npm run prod` after setting
-the variables in `.env`.
+cookie. Signed-in users can manage their saved smart lights through
+`/api/lights`; each light has a name, room, device ID, and connection status.
+For a production-style local server, use `npm run prod` after setting the
+variables in `.env`.
