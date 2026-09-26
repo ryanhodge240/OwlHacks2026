@@ -97,7 +97,7 @@ function App() {
                     </button>
                     <div className={`nav-links ${menuOpen ? 'is-open' : ''}`}>
                         <a href="#about" onClick={closeMenu}>
-                            About me
+                            About us
                         </a>
                         <a href="#why-join" onClick={closeMenu}>
                             Why join
