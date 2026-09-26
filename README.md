@@ -21,6 +21,5 @@ export SESSION_SECRET=replace-this-with-a-long-random-value
 npm run prod
 ```
 
-The backend creates its tables on startup and serves the React build on port
-3000. Authentication is available under `/api/auth` and uses an HTTP-only
+The backend creates its tables on startup and serves the React build on port 3000. Authentication is available under `/api/auth` and uses an HTTP-only
 session cookie.
