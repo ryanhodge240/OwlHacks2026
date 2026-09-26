@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { FormEvent, useEffect, useState } from 'react';
 import {
   FiArrowUpRight,
   FiCalendar,
@@ -31,8 +31,59 @@ const features = [
 
 function App() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [authOpen, setAuthOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [user, setUser] = useState<{ username: string } | null>(null);
+  const [authError, setAuthError] = useState('');
+  const [authBusy, setAuthBusy] = useState(false);
 
   const closeMenu = () => setMenuOpen(false);
+
+  useEffect(() => {
+    if (typeof fetch === 'undefined') return;
+    fetch('/api/auth/me')
+      .then((response) => response.json())
+      .then((data) => setUser(data.user))
+      .catch(() => undefined);
+  }, []);
+
+  const openAuth = (mode: 'login' | 'register') => {
+    setAuthMode(mode);
+    setAuthError('');
+    setPassword('');
+    setAuthOpen(true);
+    closeMenu();
+  };
+
+  const submitAuth = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setAuthBusy(true);
+    setAuthError('');
+
+    try {
+      const response = await fetch(`/api/auth/${authMode}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Authentication failed.');
+      setUser(data.user);
+      setAuthOpen(false);
+      setPassword('');
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : 'Authentication failed.');
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
+  const logout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    setUser(null);
+  };
 
   return (
     <div className="owl-page">
@@ -55,9 +106,13 @@ function App() {
             <a href="#about" onClick={closeMenu}>About</a>
             <a href="#why-join" onClick={closeMenu}>Why join</a>
             <a href="#schedule" onClick={closeMenu}>Schedule</a>
-            <a className="nav-cta" href="#register" onClick={closeMenu}>
-              Get updates {React.createElement(FiArrowUpRight as unknown as React.ElementType)}
-            </a>
+            {user ? (
+              <button className="nav-account" type="button" onClick={logout}>Log out @{user.username}</button>
+            ) : (
+              <button className="nav-cta nav-button" type="button" onClick={() => openAuth('login')}>
+                Log in {React.createElement(FiArrowUpRight as unknown as React.ElementType)}
+              </button>
+            )}
           </div>
         </nav>
       </header>
@@ -72,9 +127,9 @@ function App() {
               and make something that matters.
             </p>
             <div className="hero-actions" id="register">
-              <a className="button button-primary" href="mailto:hello@owlhacks2026.com">
-                Join the waitlist {React.createElement(FiArrowUpRight as unknown as React.ElementType)}
-              </a>
+              <button className="button button-primary" type="button" onClick={() => openAuth('register')}>
+                Join the community {React.createElement(FiArrowUpRight as unknown as React.ElementType)}
+              </button>
               <a className="button button-quiet" href="#why-join">Explore the event</a>
             </div>
             <div className="hero-meta">
@@ -131,6 +186,26 @@ function App() {
         <span>Owl Hacks 2026</span>
         <span>Made for the next idea.</span>
       </footer>
+      {authOpen && (
+        <div className="auth-backdrop" role="presentation" onMouseDown={() => setAuthOpen(false)}>
+          <section className="auth-card" role="dialog" aria-modal="true" aria-labelledby="auth-title" onMouseDown={(event) => event.stopPropagation()}>
+            <button className="auth-close" type="button" aria-label="Close" onClick={() => setAuthOpen(false)}>×</button>
+            <p className="eyebrow">Your builder profile</p>
+            <h2 id="auth-title">{authMode === 'login' ? 'Welcome back.' : 'Make an account.'}</h2>
+            <form onSubmit={submitAuth}>
+              <label htmlFor="username">Username</label>
+              <input id="username" value={username} onChange={(event) => setUsername(event.target.value)} minLength={3} maxLength={32} pattern="[a-zA-Z0-9_]+" required autoComplete="username" />
+              <label htmlFor="password">Password</label>
+              <input id="password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={8} maxLength={128} required autoComplete={authMode === 'login' ? 'current-password' : 'new-password'} />
+              {authError && <p className="auth-error" role="alert">{authError}</p>}
+              <button className="button button-primary auth-submit" type="submit" disabled={authBusy}>{authBusy ? 'Working...' : authMode === 'login' ? 'Log in' : 'Create account'}</button>
+            </form>
+            <button className="auth-switch" type="button" onClick={() => openAuth(authMode === 'login' ? 'register' : 'login')}>
+              {authMode === 'login' ? 'Need an account? Register' : 'Already have an account? Log in'}
+            </button>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
