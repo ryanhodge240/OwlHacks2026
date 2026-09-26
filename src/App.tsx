@@ -119,7 +119,9 @@ function App() {
             <main className="auth-page">
                 <div className="auth-visual">
                     <div className="brand-lockup">
-                        <span className="brand-mark"><img src={BeaconLogo} alt="Lamp with lighting room" /></span>
+                        <span className="brand-mark">
+                            <img src={BeaconLogo} alt="Lamp with lighting room" />
+                        </span>
                         <span>Beacon</span>
                     </div>
                     <div className="visual-copy">

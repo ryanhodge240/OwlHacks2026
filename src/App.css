@@ -49,7 +49,7 @@ button {
 .brand-lockup {
     display: inline-flex;
     align-items: center;
-    gap: .7rem;
+    gap: 0.7rem;
 
     font-size: 1.5rem;
     font-weight: 700;

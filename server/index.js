@@ -102,7 +102,7 @@ async function currentUser(request) {
 }
 
 async function ensureEnum(pool, name, values) {
-    const quote = v => `'${v.replace(/'/g, "''")}'`;
+    const quote = (v) => `'${v.replace(/'/g, "''")}'`;
 
     await pool.query(`
         DO $$ BEGIN
