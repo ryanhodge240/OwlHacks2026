@@ -3,7 +3,7 @@
     --muted: #aaa79f;
     --deep: #151816;
     --panel: #1d211e;
-    --line: 111;
+    --line: rgba(255, 170, 0, 0.12);
     --lime: #d8f36b;
     --orange: #ff9c68;
 }
@@ -49,7 +49,7 @@ button {
 .brand-lockup {
     display: inline-flex;
     align-items: center;
-    gap: 0.7rem;
+    gap: .7rem;
 
     font-size: 1.5rem;
     font-weight: 700;
