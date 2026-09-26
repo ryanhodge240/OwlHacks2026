@@ -29,6 +29,14 @@ limited to the files required by the current task.
 - Always parenthesize arrow-function parameters.
 - `package-lock.json` is generated and is intentionally excluded from Prettier.
 
+## Dependency Lockfile
+
+- Keep `package.json` and `package-lock.json` synchronized whenever dependencies change.
+- The Docker image and GitHub Actions use Node 22 with npm 10, so validate lockfile changes with `npx npm@10 ci`.
+- Do not assume a local npm install is sufficient if it uses a different npm major version.
+- If CI reports `Missing: yaml@2.9.1 from lock file`, regenerate the lockfile with `npm install --package-lock-only`, then verify with `npx npm@10 ci` before committing it.
+- Never hand-edit dependency entries in `package-lock.json`.
+
 ## Quality Checks
 
 Run these commands before completing changes:

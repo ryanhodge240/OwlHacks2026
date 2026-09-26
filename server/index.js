@@ -2,12 +2,13 @@ const crypto = require('node:crypto');
 const path = require('node:path');
 
 const bcrypt = require('bcryptjs');
+require('dotenv').config();
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { Pool } = require('pg');
 
 const app = express();
-const port = Number(process.env.PORT || 3000);
+const port = Number(process.env.API_PORT || 3000);
 const isProduction = process.env.NODE_ENV === 'production';
 const sessionSecret = process.env.SESSION_SECRET;
 

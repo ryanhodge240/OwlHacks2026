@@ -1,0 +1,19 @@
+services:
+    postgres:
+        image: postgres:17-alpine
+        environment:
+            POSTGRES_DB: owlhacks2026
+            POSTGRES_PASSWORD: owlhacks
+            POSTGRES_USER: owlhacks
+        healthcheck:
+            test: ['CMD-SHELL', 'pg_isready -U owlhacks -d owlhacks2026']
+            interval: 5s
+            timeout: 5s
+            retries: 10
+        ports:
+            - '5432:5432'
+        volumes:
+            - owlhacks2026-postgres:/var/lib/postgresql/data
+
+volumes:
+    owlhacks2026-postgres:
