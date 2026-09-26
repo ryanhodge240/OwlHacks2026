@@ -3,7 +3,7 @@
     --muted: #aaa79f;
     --deep: #151816;
     --panel: #1d211e;
-    --line: rgba(245, 241, 233, 0.12);
+    --line: 111;
     --lime: #d8f36b;
     --orange: #ff9c68;
 }
@@ -38,25 +38,23 @@ button {
     padding: 2.25rem clamp(2rem, 6vw, 7rem) 2.5rem;
     background: radial-gradient(circle at 80% 60%, rgba(216, 243, 107, 0.16), transparent 22rem), #20251f;
 }
+
+.brand-mark img {
+    width: 3rem;
+    height: 3rem;
+    object-fit: contain;
+    display: block;
+}
+
 .brand-lockup {
     display: inline-flex;
     align-items: center;
-    gap: 0.7rem;
-    color: var(--ink);
-    font-size: 1.18rem;
+    gap: .7rem;
+
+    font-size: 1.5rem;
     font-weight: 700;
-    letter-spacing: -0.04em;
 }
-.brand-mark {
-    display: grid;
-    width: 2.15rem;
-    height: 2.15rem;
-    place-items: center;
-    border-radius: 0.65rem;
-    color: var(--deep);
-    background: var(--lime);
-    font-size: 1.1rem;
-}
+
 .visual-copy {
     position: relative;
     z-index: 1;

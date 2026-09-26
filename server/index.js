@@ -1,3 +1,4 @@
+const { TRIGGER_TYPES, DEVICE_TYPES } = require('./enums.js');
 const crypto = require('node:crypto');
 const path = require('node:path');
 
@@ -98,6 +99,21 @@ async function currentUser(request) {
     );
 
     return result.rows[0] || null;
+}
+
+async function ensureEnum(pool, name, values) {
+    const quote = v => `'${v.replace(/'/g, "''")}'`;
+
+    await pool.query(`
+        DO $$ BEGIN
+        CREATE TYPE ${name} AS ENUM (${values.map(quote).join(', ')});
+        EXCEPTION WHEN duplicate_object THEN NULL;
+        END $$;
+    `);
+
+    for (const v of values) {
+        await pool.query(`ALTER TYPE ${name} ADD VALUE IF NOT EXISTS ${quote(v)}`);
+    }
 }
 
 const authLimiter = rateLimit({
@@ -242,6 +258,8 @@ app.use((request, response, next) => {
 });
 
 async function start() {
+    await ensureEnum(pool, 'trigger_type', TRIGGER_TYPES);
+    await ensureEnum(pool, 'device_type', DEVICE_TYPES);
     await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
       id BIGSERIAL PRIMARY KEY,
@@ -257,17 +275,48 @@ async function start() {
     );
     CREATE INDEX IF NOT EXISTS sessions_user_id_idx ON sessions(user_id);
     CREATE INDEX IF NOT EXISTS sessions_expires_at_idx ON sessions(expires_at);
-    CREATE TABLE IF NOT EXISTS smart_lights (
-      id BIGSERIAL PRIMARY KEY,
-      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      name VARCHAR(64) NOT NULL,
-      room VARCHAR(64) NOT NULL,
-      device_id VARCHAR(64) NOT NULL,
-      is_online BOOLEAN NOT NULL DEFAULT TRUE,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      UNIQUE (user_id, device_id)
+    CREATE TABLE IF NOT EXISTS room (
+        id BIGSERIAL PRIMARY KEY,
+        user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name VARCHAR(150) NOT NULL
     );
-    CREATE INDEX IF NOT EXISTS smart_lights_user_id_idx ON smart_lights(user_id);
+    CREATE TABLE IF NOT EXISTS device (
+        id BIGSERIAL PRIMARY KEY,
+        user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name VARCHAR(150) NOT NULL,
+        type device_type NOT NULL,
+        room_id BIGINT NOT NULL REFERENCES room(id),
+        device_id TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS default_state (
+        id BIGSERIAL PRIMARY KEY,
+        light_id BIGINT NOT NULL REFERENCES device(id) ON DELETE CASCADE,
+        color INT,
+        brightness INT,
+        pulse INT
+    );
+    CREATE TABLE IF NOT EXISTS event (
+        id BIGSERIAL PRIMARY KEY,
+        user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name VARCHAR(150),
+        trigger trigger_type NOT NULL,
+        event_length INT NOT NULL,
+        color INT NOT NULL,
+        brightness INT NOT NULL,
+        pulse INT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS device_event (
+        device_id BIGINT NOT NULL REFERENCES device(id) ON DELETE CASCADE,
+        event_id BIGINT NOT NULL REFERENCES event(id) ON DELETE CASCADE,
+        PRIMARY KEY (device_id, event_id)
+    );
+    CREATE INDEX IF NOT EXISTS room_user_id_idx ON room(user_id);
+    CREATE INDEX IF NOT EXISTS device_user_id_idx ON device(user_id);
+    CREATE INDEX IF NOT EXISTS device_room_id_idx ON device(room_id);
+    CREATE INDEX IF NOT EXISTS default_state_light_id_idx ON default_state(light_id);
+    CREATE INDEX IF NOT EXISTS event_user_id_idx ON event(user_id);
+    CREATE INDEX IF NOT EXISTS device_event_event_id_idx ON device_event(event_id);
   `);
 
     await pool.query('DELETE FROM sessions WHERE expires_at <= NOW()');

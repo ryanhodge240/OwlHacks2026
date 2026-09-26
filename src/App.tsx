@@ -1,5 +1,6 @@
 import React, { FormEvent, useEffect, useState } from 'react';
 import { FiBell, FiCheckCircle, FiLogOut, FiPlus, FiShield, FiSun, FiTrash2, FiWifi } from 'react-icons/fi';
+import BeaconLogo from './img/beacon-logo.png';
 import './App.css';
 
 type User = { id: number; username: string };
@@ -118,7 +119,7 @@ function App() {
             <main className="auth-page">
                 <div className="auth-visual">
                     <div className="brand-lockup">
-                        <span className="brand-mark">{React.createElement(FiSun as unknown as React.ElementType)}</span>
+                        <span className="brand-mark"><img src={BeaconLogo} alt="Lamp with lighting room" /></span>
                         <span>Beacon</span>
                     </div>
                     <div className="visual-copy">
