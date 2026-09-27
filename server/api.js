@@ -287,6 +287,32 @@ function registerApi(app, { pool, currentUser }) {
     const triggerTimers = new Map();
     const triggerGenerations = new Map();
 
+    // Latest saved default for a light, read fresh from the database.
+    async function currentDefaultState(deviceId) {
+        const result = await pool.query(
+            'SELECT color, brightness, pulse FROM default_state WHERE light_id = $1 ORDER BY id DESC LIMIT 1',
+            [deviceId],
+        );
+        return result.rows[0] ? lightState(result.rows[0]) : null;
+    }
+
+    // Pushes a light's default state to Home Assistant immediately.
+    // If an alert is running on that light, it's left alone; the alert's timer
+    // switches to the newest default when it ends.
+    async function applyDefaultState(device) {
+        if (!device.hardwareId) return { status: 'skipped', reason: 'no_hardware_id' };
+        if (triggerTimers.has(device.hardwareId)) return { status: 'deferred', reason: 'alert_active' };
+
+        try {
+            if (device.defaultState) await callHomeAssistant(device.hardwareId, device.defaultState);
+            else await turnOffHomeAssistant(device.hardwareId);
+            return { status: 'applied' };
+        } catch (error) {
+            console.error(error);
+            return { status: 'failed', reason: error.message };
+        }
+    }
+
     // Wraps a handler so it has a signed-in user and API errors become JSON responses.
     const route =
         (handler, { auth = true } = {}) =>
@@ -481,8 +507,13 @@ function registerApi(app, { pool, currentUser }) {
             });
 
             const [device] = await loadDevices(pool, user.id, id);
-            logEvent('device_default_state_updated', { userId: user.id, deviceId: id });
-            return response.json({ device });
+            const lightUpdate = await applyDefaultState(device);
+            logEvent('device_default_state_updated', {
+                userId: user.id,
+                deviceId: id,
+                lightUpdate: lightUpdate.status,
+            });
+            return response.json({ device, lightUpdate });
         }),
     );
 
@@ -497,8 +528,13 @@ function registerApi(app, { pool, currentUser }) {
             );
             const [device] = await loadDevices(pool, user.id, id);
             if (!device) fail(404, 'Device not found.');
-            logEvent('device_default_state_deleted', { userId: user.id, deviceId: id });
-            return response.json({ device });
+            const lightUpdate = await applyDefaultState(device);
+            logEvent('device_default_state_deleted', {
+                userId: user.id,
+                deviceId: id,
+                lightUpdate: lightUpdate.status,
+            });
+            return response.json({ device, lightUpdate });
         }),
     );
 
@@ -620,9 +656,9 @@ function registerApi(app, { pool, currentUser }) {
     );
 
     /*
-     * Trigger resolution. Given a detected sound, returns exactly what each linked light
-     * should do: the alert state, how long to hold it, and the default state to return to.
-     * This is the hook for the microphone / light hardware integration later.
+     * Trigger resolution. Given a detected sound, sends each linked light its alert state
+     * through Home Assistant, holds it for the event length, then returns the light to its
+     * current default state (or turns it off if it has none).
      */
     app.post(
         '/api/triggers/:trigger',
@@ -691,8 +727,10 @@ function registerApi(app, { pool, currentUser }) {
                             )
                                 return;
                             try {
-                                if (command.revertTo) {
-                                    await callHomeAssistant(command.hardwareId, command.revertTo);
+                                // Read the default again so a default changed during the alert is respected.
+                                const revertTo = await currentDefaultState(command.deviceId);
+                                if (revertTo) {
+                                    await callHomeAssistant(command.hardwareId, revertTo);
                                 } else {
                                     await turnOffHomeAssistant(command.hardwareId);
                                 }
