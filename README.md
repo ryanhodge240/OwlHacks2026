@@ -84,5 +84,5 @@ curl -X POST \
     http://localhost:3001/api/triggers/doorbell
 ```
 
-Valid trigger names are `fire_alarm`, `baby_crying`, `door_knock`, `doorbell`,
-and `dog_barking`.
+Valid trigger names are `fire_alarm`, `baby_crying`, `door_knock`, `doorbell`, `dog_barking`
+and `phone_ringing`.

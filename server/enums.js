@@ -1,4 +1,4 @@
-const TRIGGER_TYPES = ['fire_alarm', 'baby_crying', 'door_knock', 'doorbell', 'dog_barking'];
+const TRIGGER_TYPES = ['fire_alarm', 'baby_crying', 'door_knock', 'doorbell', 'dog_barking', 'phone_ringing'];
 
 const TRIGGER_TYPES_LABELS = {
     fire_alarm: 'Fire alarm',
@@ -6,6 +6,7 @@ const TRIGGER_TYPES_LABELS = {
     door_knock: 'Knocking on door',
     doorbell: 'Doorbell ring',
     dog_barking: 'Dog barking',
+    phone_ringing: 'Phone ringing',
 };
 
 const DEVICE_TYPES = ['light', 'microphone', 'speaker', 'camera'];
