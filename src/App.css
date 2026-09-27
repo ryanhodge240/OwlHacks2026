@@ -3,7 +3,7 @@
  * Colours, the font, buttons and inputs come from index.css.
  */
 
- .auth-page {
+.auth-page {
     display: grid;
     min-height: 100vh;
     min-height: 100dvh; /* accounts for mobile browser toolbars */

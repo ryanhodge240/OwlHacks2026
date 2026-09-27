@@ -5,7 +5,7 @@
  * Colours, buttons and inputs come from index.css.
  */
 
- .dashboard {
+.dashboard {
     min-height: 100vh;
     min-height: 100dvh;
     background: var(--bg);

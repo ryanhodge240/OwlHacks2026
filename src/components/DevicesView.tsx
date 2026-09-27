@@ -26,11 +26,7 @@ const FALLBACK_DEFAULT: LightDraft = { colorHex: '#ffd9a0', brightness: 60, puls
 
 export type Preview = { state: LightState; label: string };
 
-type DialogState =
-    | { kind: 'add' }
-    | { kind: 'details'; deviceId: number }
-    | { kind: 'default'; device: Device }
-    | null;
+type DialogState = { kind: 'add' } | { kind: 'details'; deviceId: number } | { kind: 'default'; device: Device } | null;
 
 type Props = {
     meta: Meta;
@@ -117,7 +113,11 @@ export default function DevicesView({ meta, rooms, devices, previews, onPreview,
                         ))}
                     </select>
                 </div>
-                <button className="btn btn-primary toolbar-add" type="button" onClick={() => setDialog({ kind: 'add' })}>
+                <button
+                    className="btn btn-primary toolbar-add"
+                    type="button"
+                    onClick={() => setDialog({ kind: 'add' })}
+                >
                     New Device <Icon icon={FiPlus} />
                 </button>
             </div>
@@ -160,7 +160,11 @@ export default function DevicesView({ meta, rooms, devices, previews, onPreview,
                         <div className="table-empty">
                             <h3>No devices yet</h3>
                             <p>Add a light and pick the room it lives in. You can set its resting color right after.</p>
-                            <button className="btn btn-primary" type="button" onClick={() => setDialog({ kind: 'add' })}>
+                            <button
+                                className="btn btn-primary"
+                                type="button"
+                                onClick={() => setDialog({ kind: 'add' })}
+                            >
                                 Add your first device
                             </button>
                         </div>
@@ -536,7 +540,9 @@ function AddDeviceDialog({
                         maxLength={64}
                         placeholder="beacon-001"
                     />
-                    <p className="field-hint">The ID the physical device reports, used when Beacon sends it commands.</p>
+                    <p className="field-hint">
+                        The ID the physical device reports, used when Beacon sends it commands.
+                    </p>
                 </div>
 
                 {error && (
