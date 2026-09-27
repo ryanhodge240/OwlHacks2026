@@ -1,4 +1,5 @@
 const { TRIGGER_TYPES, DEVICE_TYPES } = require('./enums.js');
+const { registerApi } = require('./api.js');
 const crypto = require('node:crypto');
 const path = require('node:path');
 
@@ -63,17 +64,6 @@ function readCookie(request, name) {
 
 function publicUser(user) {
     return { id: user.id, username: user.username };
-}
-
-function publicLight(light) {
-    return {
-        id: light.id,
-        name: light.name,
-        room: light.room,
-        deviceId: light.device_id,
-        isOnline: light.is_online,
-        createdAt: light.created_at,
-    };
 }
 
 async function createSession(userId) {
@@ -198,58 +188,7 @@ app.get('/api/auth/me', async (request, response) => {
     response.json({ user: user ? publicUser(user) : null });
 });
 
-app.get('/api/lights', async (request, response) => {
-    const user = await currentUser(request);
-    if (!user) return response.status(401).json({ error: 'You must be signed in.' });
-
-    const result = await pool.query(
-        `SELECT id, name, room, device_id, is_online, created_at
-     FROM smart_lights
-     WHERE user_id = $1
-     ORDER BY created_at DESC`,
-        [user.id],
-    );
-    return response.json({ lights: result.rows.map(publicLight) });
-});
-
-app.post('/api/lights', async (request, response) => {
-    const user = await currentUser(request);
-    if (!user) return response.status(401).json({ error: 'You must be signed in.' });
-
-    const name = String(request.body.name || '').trim();
-    const room = String(request.body.room || '').trim();
-    const deviceId = String(request.body.deviceId || '').trim();
-    if (name.length < 2 || name.length > 64)
-        return response.status(400).json({ error: 'Light name must be between 2 and 64 characters.' });
-    if (room.length < 2 || room.length > 64)
-        return response.status(400).json({ error: 'Room must be between 2 and 64 characters.' });
-    if (!/^[a-zA-Z0-9_-]{2,64}$/.test(deviceId))
-        return response.status(400).json({ error: 'Device ID must use letters, numbers, hyphens, or underscores.' });
-
-    try {
-        const result = await pool.query(
-            `INSERT INTO smart_lights (user_id, name, room, device_id)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, name, room, device_id, is_online, created_at`,
-            [user.id, name, room, deviceId],
-        );
-        return response.status(201).json({ light: publicLight(result.rows[0]) });
-    } catch (error) {
-        if (error.code === '23505') return response.status(409).json({ error: 'That device is already connected.' });
-        console.error(error);
-        return response.status(500).json({ error: 'Unable to add this light.' });
-    }
-});
-
-app.delete('/api/lights/:id', async (request, response) => {
-    const user = await currentUser(request);
-    if (!user) return response.status(401).json({ error: 'You must be signed in.' });
-
-    const lightId = Number(request.params.id);
-    if (!Number.isSafeInteger(lightId)) return response.status(400).json({ error: 'Invalid light.' });
-    await pool.query('DELETE FROM smart_lights WHERE id = $1 AND user_id = $2', [lightId, user.id]);
-    return response.status(204).end();
-});
+registerApi(app, { pool, currentUser });
 
 app.use(express.static(path.join(__dirname, '..', 'build')));
 app.use((request, response, next) => {

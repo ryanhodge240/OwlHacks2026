@@ -1,18 +1,9 @@
 import React, { FormEvent, useEffect, useState } from 'react';
-import { FiBell, FiCheckCircle, FiLogOut, FiPlus, FiShield, FiSun, FiTrash2, FiWifi } from 'react-icons/fi';
+import { FiBell, FiShield } from 'react-icons/fi';
 import BeaconLogo from './img/beacon-logo.png';
+import Dashboard from './Dashboard';
+import { User } from './types';
 import './App.css';
-
-type User = { id: number; username: string };
-
-type SmartLight = {
-    id: number;
-    name: string;
-    room: string;
-    deviceId: string;
-    isOnline: boolean;
-    createdAt: string;
-};
 
 type AuthMode = 'login' | 'register';
 
@@ -24,13 +15,6 @@ function App() {
     const [password, setPassword] = useState('');
     const [authError, setAuthError] = useState('');
     const [authBusy, setAuthBusy] = useState(false);
-    const [lights, setLights] = useState<SmartLight[]>([]);
-    const [lightsLoading, setLightsLoading] = useState(false);
-    const [lightName, setLightName] = useState('');
-    const [lightRoom, setLightRoom] = useState('');
-    const [deviceId, setDeviceId] = useState('');
-    const [lightError, setLightError] = useState('');
-    const [lightBusy, setLightBusy] = useState(false);
 
     useEffect(() => {
         fetch('/api/auth/me')
@@ -39,19 +23,6 @@ function App() {
             .catch(() => undefined)
             .finally(() => setCheckingSession(false));
     }, []);
-
-    useEffect(() => {
-        if (!user) return;
-        setLightsLoading(true);
-        fetch('/api/lights')
-            .then(async (response) => {
-                const data = await response.json();
-                if (!response.ok) throw new Error(data.error || 'Unable to load lights.');
-                setLights(data.lights);
-            })
-            .catch((error) => setLightError(error instanceof Error ? error.message : 'Unable to load lights.'))
-            .finally(() => setLightsLoading(false));
-    }, [user]);
 
     const submitAuth = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -78,36 +49,6 @@ function App() {
     const logout = async () => {
         await fetch('/api/auth/logout', { method: 'POST' });
         setUser(null);
-        setLights([]);
-    };
-
-    const addLight = async (event: FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
-        setLightBusy(true);
-        setLightError('');
-
-        try {
-            const response = await fetch('/api/lights', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: lightName, room: lightRoom, deviceId }),
-            });
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.error || 'Unable to add this light.');
-            setLights((currentLights) => [data.light, ...currentLights]);
-            setLightName('');
-            setLightRoom('');
-            setDeviceId('');
-        } catch (error) {
-            setLightError(error instanceof Error ? error.message : 'Unable to add this light.');
-        } finally {
-            setLightBusy(false);
-        }
-    };
-
-    const removeLight = async (id: number) => {
-        const response = await fetch(`/api/lights/${id}`, { method: 'DELETE' });
-        if (response.ok) setLights((currentLights) => currentLights.filter((light) => light.id !== id));
     };
 
     if (checkingSession) {
@@ -212,148 +153,7 @@ function App() {
         );
     }
 
-    return (
-        <main className="dashboard-page">
-            <header className="dashboard-header">
-                <a className="brand-lockup" href="/" aria-label="Beacon home">
-                    <span className="brand-mark">{React.createElement(FiSun as unknown as React.ElementType)}</span>
-                    <span>Beacon</span>
-                </a>
-                <div className="account-area">
-                    <span className="account-greeting">
-                        Hi, <strong>{user.username}</strong>
-                    </span>
-                    <button className="logout-button" type="button" onClick={logout}>
-                        {React.createElement(FiLogOut as unknown as React.ElementType)} Log out
-                    </button>
-                </div>
-            </header>
-            <div className="dashboard-content">
-                <section className="dashboard-intro">
-                    <div>
-                        <p className="panel-overline">Your dashboard</p>
-                        <h1>
-                            Your signals, <em>your way.</em>
-                        </h1>
-                        <p>Add the lights you want Beacon to use for important moments around your home.</p>
-                    </div>
-                    <div className="status-pill">
-                        <span /> System ready
-                    </div>
-                </section>
-                <section className="dashboard-grid">
-                    <div className="lights-section">
-                        <div className="section-title">
-                            <div>
-                                <p className="panel-overline">Connected devices</p>
-                                <h2>
-                                    Your smart lights <span>{lights.length}</span>
-                                </h2>
-                            </div>
-                            {React.createElement(FiWifi as unknown as React.ElementType)}
-                        </div>
-                        {lightsLoading ? (
-                            <div className="empty-state">Loading your lights...</div>
-                        ) : lights.length === 0 ? (
-                            <div className="empty-state">
-                                <span className="empty-icon">
-                                    {React.createElement(FiSun as unknown as React.ElementType)}
-                                </span>
-                                <h3>No lights connected yet</h3>
-                                <p>Add your first light to start turning everyday sounds into visual alerts.</p>
-                            </div>
-                        ) : (
-                            <div className="light-list">
-                                {lights.map((light) => (
-                                    <article className="light-card" key={light.id}>
-                                        <div className="light-icon">
-                                            {React.createElement(FiSun as unknown as React.ElementType)}
-                                        </div>
-                                        <div className="light-details">
-                                            <h3>{light.name}</h3>
-                                            <p>
-                                                {light.room} ·{' '}
-                                                <span className={light.isOnline ? 'online' : ''}>
-                                                    {light.isOnline ? 'Online' : 'Offline'}
-                                                </span>
-                                            </p>
-                                            <small>{light.deviceId}</small>
-                                        </div>
-                                        <button
-                                            className="delete-button"
-                                            type="button"
-                                            aria-label={`Remove ${light.name}`}
-                                            onClick={() => removeLight(light.id)}
-                                        >
-                                            {React.createElement(FiTrash2 as unknown as React.ElementType)}
-                                        </button>
-                                    </article>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                    <aside className="add-light-card">
-                        <div className="add-card-icon">
-                            {React.createElement(FiPlus as unknown as React.ElementType)}
-                        </div>
-                        <p className="panel-overline">Add a device</p>
-                        <h2>
-                            Bring a light
-                            <br />
-                            into the system.
-                        </h2>
-                        <p className="add-copy">Connect a smart light by giving it a name and its device ID.</p>
-                        <form className="light-form" onSubmit={addLight}>
-                            <label htmlFor="light-name">Light name</label>
-                            <input
-                                id="light-name"
-                                value={lightName}
-                                onChange={(event) => setLightName(event.target.value)}
-                                required
-                                placeholder="e.g. Bedroom lamp"
-                            />
-                            <label htmlFor="light-room">Room</label>
-                            <input
-                                id="light-room"
-                                value={lightRoom}
-                                onChange={(event) => setLightRoom(event.target.value)}
-                                required
-                                placeholder="e.g. Bedroom"
-                            />
-                            <label htmlFor="device-id">Device ID</label>
-                            <input
-                                id="device-id"
-                                value={deviceId}
-                                onChange={(event) => setDeviceId(event.target.value)}
-                                required
-                                maxLength={64}
-                                placeholder="e.g. beacon-001"
-                            />
-                            {lightError && (
-                                <p className="form-error" role="alert">
-                                    {lightError}
-                                </p>
-                            )}
-                            <button className="primary-button" type="submit" disabled={lightBusy}>
-                                {lightBusy ? 'Adding...' : 'Add smart light'} <span>→</span>
-                            </button>
-                        </form>
-                    </aside>
-                </section>
-                <section className="how-it-works">
-                    <div className="how-icon">{React.createElement(FiCheckCircle as unknown as React.ElementType)}</div>
-                    <div>
-                        <p className="panel-overline">Coming next</p>
-                        <h2>Make every alert impossible to miss.</h2>
-                        <p>
-                            Once your lights are connected, you will be able to choose colors and patterns for meetings,
-                            calls, timers, and more.
-                        </p>
-                    </div>
-                </section>
-            </div>
-        </main>
-    );
+    return <Dashboard user={user} onLogout={logout} />;
 }
 
 export default App;
