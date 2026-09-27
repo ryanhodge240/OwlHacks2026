@@ -1,4 +1,5 @@
 const { TRIGGER_TYPES, TRIGGER_TYPES_LABELS, DEVICE_TYPES } = require('./enums.js');
+const crypto = require('node:crypto');
 
 // Limits shared by validation and the frontend (exposed through /api/meta).
 const LIMITS = {
@@ -72,6 +73,73 @@ function lightState(row) {
         brightness: row.brightness,
         pulse: row.pulse,
     };
+}
+
+function rgbColor(color) {
+    return [(color >> 16) & 0xff, (color >> 8) & 0xff, color & 0xff];
+}
+
+function homeAssistantBrightness(brightness) {
+    return Math.round((brightness / 100) * 255);
+}
+
+function homeAssistantUrl() {
+    return String(process.env.HOME_ASSISTANT_URL || '').replace(/\/$/, '');
+}
+
+function hasTriggerApiKey(request) {
+    const expected = process.env.TRIGGER_API_KEY;
+    const authorization = request.headers.authorization || '';
+    const supplied = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
+    if (!expected || !supplied) return false;
+
+    const expectedBuffer = Buffer.from(expected);
+    const suppliedBuffer = Buffer.from(supplied);
+    return expectedBuffer.length === suppliedBuffer.length && crypto.timingSafeEqual(expectedBuffer, suppliedBuffer);
+}
+
+async function callHomeAssistant(entityId, state) {
+    const url = homeAssistantUrl();
+    const token = process.env.HOME_ASSISTANT_KEY;
+    if (!url || !token) fail(503, 'Home Assistant integration is not configured.');
+
+    const response = await fetch(`${url}/api/services/light/turn_on`, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            entity_id: entityId,
+            rgb_color: rgbColor(state.color),
+            brightness: homeAssistantBrightness(state.brightness),
+        }),
+    });
+
+    if (!response.ok) {
+        const detail = await response.text().catch(() => '');
+        throw new Error(`Home Assistant rejected ${entityId}: ${response.status} ${detail}`.trim());
+    }
+}
+
+async function turnOffHomeAssistant(entityId) {
+    const url = homeAssistantUrl();
+    const token = process.env.HOME_ASSISTANT_KEY;
+    if (!url || !token) fail(503, 'Home Assistant integration is not configured.');
+
+    const response = await fetch(`${url}/api/services/light/turn_off`, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ entity_id: entityId }),
+    });
+
+    if (!response.ok) {
+        const detail = await response.text().catch(() => '');
+        throw new Error(`Home Assistant rejected turning off ${entityId}: ${response.status} ${detail}`.trim());
+    }
 }
 
 function publicRoom(row) {
@@ -204,6 +272,9 @@ async function withTransaction(pool, work) {
 /* ---------- routes ---------- */
 
 function registerApi(app, { pool, currentUser }) {
+    const triggerTimers = new Map();
+    const triggerGenerations = new Map();
+
     // Wraps a handler so it has a signed-in user and API errors become JSON responses.
     const route =
         (handler, { auth = true } = {}) =>
@@ -508,12 +579,17 @@ function registerApi(app, { pool, currentUser }) {
      */
     app.post(
         '/api/triggers/:trigger',
-        route(async (request, response, user) => {
-            const trigger = request.params.trigger;
-            if (!TRIGGER_TYPES.includes(trigger)) fail(404, 'Unknown trigger.');
+        route(
+            async (request, response) => {
+                const apiKeyAuthorized = hasTriggerApiKey(request);
+                const user = apiKeyAuthorized ? null : await currentUser(request);
+                if (!apiKeyAuthorized && !user) return response.status(401).json({ error: 'You must be signed in.' });
 
-            const result = await pool.query(
-                `SELECT event.id AS event_id, event.name AS event_name, event.event_length,
+                const trigger = request.params.trigger;
+                if (!TRIGGER_TYPES.includes(trigger)) fail(404, 'Unknown trigger.');
+
+                const result = await pool.query(
+                    `SELECT event.id AS event_id, event.name AS event_name, event.event_length,
                         event.color, event.brightness, event.pulse,
                         device.id AS device_id, device.name AS device_name, device.device_id AS hardware_id,
                         ds.color AS ds_color, ds.brightness AS ds_brightness, ds.pulse AS ds_pulse
@@ -524,31 +600,75 @@ function registerApi(app, { pool, currentUser }) {
                      SELECT color, brightness, pulse FROM default_state
                      WHERE default_state.light_id = device.id ORDER BY id DESC LIMIT 1
                  ) ds ON TRUE
-                 WHERE event.user_id = $1 AND event.trigger = $2
-                 ORDER BY device.id, event.id`,
-                [user.id, trigger],
-            );
+                  WHERE ($1::BIGINT IS NULL OR event.user_id = $1) AND event.trigger = $2
+                  ORDER BY device.id, event.id`,
+                    [user?.id || null, trigger],
+                );
 
-            const commands = result.rows.map((row) => ({
-                deviceId: Number(row.device_id),
-                deviceName: row.device_name,
-                hardwareId: row.hardware_id,
-                eventId: Number(row.event_id),
-                eventName: row.event_name,
-                durationSeconds: row.event_length,
-                alertState: lightState(row),
-                revertTo:
-                    row.ds_color === null && row.ds_brightness === null
-                        ? null
-                        : lightState({ color: row.ds_color, brightness: row.ds_brightness, pulse: row.ds_pulse }),
-            }));
+                const commands = result.rows.map((row) => ({
+                    deviceId: Number(row.device_id),
+                    deviceName: row.device_name,
+                    hardwareId: row.hardware_id,
+                    eventId: Number(row.event_id),
+                    eventName: row.event_name,
+                    durationSeconds: row.event_length,
+                    alertState: lightState(row),
+                    revertTo:
+                        row.ds_color === null && row.ds_brightness === null
+                            ? null
+                            : lightState({ color: row.ds_color, brightness: row.ds_brightness, pulse: row.ds_pulse }),
+                }));
 
-            return response.json({
-                trigger,
-                triggerLabel: TRIGGER_TYPES_LABELS[trigger] || trigger,
-                commands,
-            });
-        }),
+                if (result.rows.some((row) => !row.hardware_id)) {
+                    fail(400, 'Every affected light must have a Home Assistant entity ID.');
+                }
+
+                const commandsByHardwareId = new Map();
+                for (const command of commands) commandsByHardwareId.set(command.hardwareId, command);
+
+                await Promise.all(
+                    [...commandsByHardwareId.values()].map(async (command) => {
+                        const previousTimer = triggerTimers.get(command.hardwareId);
+                        if (previousTimer) clearTimeout(previousTimer);
+                        const generation = (triggerGenerations.get(command.hardwareId) || 0) + 1;
+                        triggerGenerations.set(command.hardwareId, generation);
+
+                        await callHomeAssistant(command.hardwareId, command.alertState);
+                        if (triggerGenerations.get(command.hardwareId) !== generation) return;
+
+                        const timer = setTimeout(async () => {
+                            if (
+                                triggerTimers.get(command.hardwareId) !== timer ||
+                                triggerGenerations.get(command.hardwareId) !== generation
+                            )
+                                return;
+                            try {
+                                if (command.revertTo) {
+                                    await callHomeAssistant(command.hardwareId, command.revertTo);
+                                } else {
+                                    await turnOffHomeAssistant(command.hardwareId);
+                                }
+                            } catch (error) {
+                                console.error(error);
+                            } finally {
+                                if (triggerTimers.get(command.hardwareId) === timer) {
+                                    triggerTimers.delete(command.hardwareId);
+                                    triggerGenerations.delete(command.hardwareId);
+                                }
+                            }
+                        }, command.durationSeconds * 1000);
+                        triggerTimers.set(command.hardwareId, timer);
+                    }),
+                );
+
+                return response.json({
+                    trigger,
+                    triggerLabel: TRIGGER_TYPES_LABELS[trigger] || trigger,
+                    commands,
+                });
+            },
+            { auth: false },
+        ),
     );
 
     // Anything else under /api is a JSON 404 rather than the React index page.

@@ -19,6 +19,11 @@ proxies `/api` requests to the backend at `http://localhost:3001`.
 The backend port is configured with `API_PORT` in `.env`; do not use the
 generic `PORT` variable because Create React App uses it for the frontend.
 
+Set `HOME_ASSISTANT_URL` to the Home Assistant base URL, `HOME_ASSISTANT_KEY`
+to a Home Assistant long-lived access token, and `TRIGGER_API_KEY` to a secret
+used by the audio detector. The trigger API accepts either a signed-in browser
+session or the trigger key as a bearer token.
+
 Frontend changes hot reload through React. Backend changes automatically restart
 the API through Node's watch mode. Restart `npm run dev` after changing `.env`.
 
@@ -64,3 +69,20 @@ cookie. Signed-in users can manage their saved smart lights through
 `/api/lights`; each light has a name, room, device ID, and connection status.
 For a production-style local server, use `npm run prod` after setting the
 variables in `.env`.
+
+### Trigger a detected event
+
+The audio detector can trigger every light linked to an event with the valid
+trigger name. The server applies the event state for its configured duration,
+then restores each light's default state or turns it off when no default exists.
+Receiving the same or another trigger before the duration ends restarts the
+timer for the affected light.
+
+```bash
+curl -X POST \
+    -H "Authorization: Bearer $TRIGGER_API_KEY" \
+    http://localhost:3001/api/triggers/doorbell
+```
+
+Valid trigger names are `fire_alarm`, `baby_crying`, `door_knock`, `doorbell`,
+and `dog_barking`.
