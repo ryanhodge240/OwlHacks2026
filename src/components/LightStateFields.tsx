@@ -1,5 +1,4 @@
 import { LightDraft, Meta } from '../types';
-import { describePulse } from '../lightFormat';
 import LightOrb from './LightOrb';
 import './LightStateFields.css';
 
@@ -37,15 +36,6 @@ export default function LightStateFields({ value, onChange, limits, idPrefix, sh
         <div className="state-fields">
             <div className="state-preview">
                 <LightOrb state={value} />
-                <p>
-                    {value.brightness}% brightness
-                    {showPulse && (
-                        <>
-                            <br />
-                            {describePulse(value.pulse)}
-                        </>
-                    )}
-                </p>
             </div>
 
             <div className="state-controls">

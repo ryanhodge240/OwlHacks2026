@@ -155,7 +155,7 @@ function RoomDialog({
                         onChange={(event) => setName(event.target.value)}
                         maxLength={150}
                         required
-                        placeholder="Kitchen"
+                        placeholder="Room name"
                     />
                 </div>
 

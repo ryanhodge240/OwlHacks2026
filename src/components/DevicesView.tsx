@@ -2,7 +2,6 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { FiCamera, FiMic, FiPlus, FiSpeaker, FiSun } from 'react-icons/fi';
 import { IconType } from 'react-icons';
 import { api } from '../api';
-import { describeLength, describePulse } from '../lightFormat';
 import { BeaconEvent, Device, DeviceType, HomeAssistantLight, LightDraft, LightState, Meta, Room } from '../types';
 import ConfirmDialog from './ConfirmDialog';
 import Dialog from './Dialog';
@@ -193,6 +192,7 @@ export default function DevicesView({ meta, rooms, devices, events, previews, on
                 (editing.type === 'light' ? (
                     <LightSettingsDialog
                         meta={meta}
+                        rooms={rooms}
                         device={editing}
                         events={events}
                         isNew={dialog?.kind === 'edit' && Boolean(dialog.isNew)}
@@ -208,9 +208,10 @@ export default function DevicesView({ meta, rooms, devices, events, previews, on
                     />
                 ) : (
                     <OtherDeviceDialog
+                        rooms={rooms}
                         device={editing}
                         onClose={() => setDialog(null)}
-                        onRemoved={async () => {
+                        onSaved={async () => {
                             setDialog(null);
                             await onChanged();
                         }}
@@ -281,10 +282,96 @@ function DeviceRow({ device, preview, onEdit }: RowProps) {
     );
 }
 
+/* ---------- Name and room, shared by both edit dialogs ---------- */
+
+type DeviceDetails = { name: string; roomChoice: string; newRoom: string };
+
+const initialDetails = (device: Device): DeviceDetails => ({
+    name: device.name,
+    roomChoice: String(device.room.id),
+    newRoom: '',
+});
+
+const detailsChanged = (device: Device, details: DeviceDetails) =>
+    details.name.trim() !== device.name || details.roomChoice !== String(device.room.id);
+
+/** Saves a changed name and/or room in one request. Creates the room first if "New room…" was picked. */
+async function saveDetails(device: Device, details: DeviceDetails) {
+    if (!detailsChanged(device, details)) return;
+    const input: { name?: string; roomId?: number } = {};
+    const name = details.name.trim();
+    if (name !== device.name) input.name = name;
+    if (details.roomChoice !== String(device.room.id)) {
+        input.roomId =
+            details.roomChoice === NEW_ROOM ? (await api.createRoom(details.newRoom)).id : Number(details.roomChoice);
+    }
+    await api.updateDevice(device.id, input);
+}
+
+function DeviceDetailsFields({
+    rooms,
+    value,
+    onChange,
+}: {
+    rooms: Room[];
+    value: DeviceDetails;
+    onChange: (value: DeviceDetails) => void;
+}) {
+    const set = (patch: Partial<DeviceDetails>) => onChange({ ...value, ...patch });
+    return (
+        <>
+            <div className="field">
+                <label className="field-label" htmlFor="edit-device-name">
+                    Name
+                </label>
+                <input
+                    id="edit-device-name"
+                    className="input"
+                    value={value.name}
+                    onChange={(event) => set({ name: event.target.value })}
+                    minLength={2}
+                    maxLength={150}
+                    required
+                />
+            </div>
+            <div className="field">
+                <label className="field-label" htmlFor="edit-device-room">
+                    Room
+                </label>
+                <select
+                    id="edit-device-room"
+                    className="input"
+                    value={value.roomChoice}
+                    onChange={(event) => set({ roomChoice: event.target.value })}
+                >
+                    {rooms.map((room) => (
+                        <option key={room.id} value={room.id}>
+                            {room.name}
+                        </option>
+                    ))}
+                    <option value={NEW_ROOM}>New room…</option>
+                </select>
+                {value.roomChoice === NEW_ROOM && (
+                    <input
+                        className="input"
+                        aria-label="New room name"
+                        value={value.newRoom}
+                        onChange={(event) => set({ newRoom: event.target.value })}
+                        required
+                        maxLength={150}
+                        placeholder="Bedroom"
+                    />
+                )}
+            </div>
+        </>
+    );
+}
+
 /* ---------- Light settings: everyday look + which events it reacts to ---------- */
 
 function LightSettingsDialog({
     meta,
+    rooms,
     device,
     events,
     isNew,
@@ -293,6 +380,7 @@ function LightSettingsDialog({
     onSaved,
 }: {
     meta: Meta;
+    rooms: Room[];
     device: Device;
     events: BeaconEvent[];
     isNew: boolean;
@@ -301,6 +389,7 @@ function LightSettingsDialog({
     onSaved: () => Promise<void>;
 }) {
     const saved = device.defaultState;
+    const [details, setDetails] = useState<DeviceDetails>(initialDetails(device));
     // New lights start "on" so the colour picker is the first thing you see.
     const [staysOn, setStaysOn] = useState(isNew || Boolean(saved));
     const [look, setLook] = useState<LightDraft>(
@@ -323,6 +412,9 @@ function LightSettingsDialog({
         setBusy(true);
         setError('');
         try {
+            // 0. Name and room: only sent if something changed
+            await saveDetails(device, details);
+
             // 1. Everyday look: always solid
             if (staysOn) await api.setDefaultState(device.id, { ...look, pulse: 0 });
             else if (saved) await api.clearDefaultState(device.id);
@@ -366,25 +458,15 @@ function LightSettingsDialog({
     return (
         <Dialog title={isNew ? `Set up ${device.name}` : device.name} onClose={onClose} wide>
             <form onSubmit={save}>
-                <p className="dialog-intro">
-                    {isNew ? `${device.name} was added to ${device.room.name}. ` : `Light in ${device.room.name}. `}
-                    Choose how it looks day to day, and which sounds make it flash.
-                </p>
-                <p className="field-hint">
-                    Hardware ID: <span>{device.hardwareId ?? 'Not set'}</span>
-                </p>
+                <DeviceDetailsFields rooms={rooms} value={details} onChange={setDetails} />
 
                 {/* ---- 1. Everyday look ---- */}
                 <section className="settings-step" aria-labelledby="step-look">
                     <div className="settings-step-head">
-                        <span className="step-number">1</span>
                         <div>
                             <h3 id="step-look" className="dialog-section-title">
-                                When it's quiet
+                                Default Setting
                             </h3>
-                            <p className="field-hint">
-                                A solid colour the light shows normally, and goes back to after an alert.
-                            </p>
                         </div>
                     </div>
 
@@ -414,10 +496,6 @@ function LightSettingsDialog({
                                 idPrefix="everyday"
                                 showPulse={false}
                             />
-                            <p className="field-hint">
-                                {look.colorHex.toUpperCase()}, {look.brightness}%,{' '}
-                                {describePulse(look.pulse).toLowerCase()}
-                            </p>
                         </div>
                     )}
                 </section>
@@ -425,12 +503,10 @@ function LightSettingsDialog({
                 {/* ---- 2. Events ---- */}
                 <section className="settings-step" aria-labelledby="step-events">
                     <div className="settings-step-head">
-                        <span className="step-number">2</span>
                         <div>
                             <h3 id="step-events" className="dialog-section-title">
                                 When a sound is heard
                             </h3>
-                            <p className="field-hint">Tick the events this light should react to.</p>
                         </div>
                     </div>
 
@@ -456,12 +532,6 @@ function LightSettingsDialog({
                                             <LightOrb state={event} size="small" />
                                             <span className="event-pick-text">
                                                 <strong>{event.name || event.triggerLabel}</strong>
-                                                <small>
-                                                    {event.name ? `${event.triggerLabel} · ` : ''}
-                                                    {event.colorHex.toUpperCase()}, {event.brightness}%,{' '}
-                                                    {describePulse(event.pulse).toLowerCase()}, for{' '}
-                                                    {describeLength(event.eventLength)}
-                                                </small>
                                             </span>
                                         </label>
                                     </li>
@@ -522,14 +592,17 @@ function LightSettingsDialog({
 /* ---------- Microphones, speakers, cameras: nothing to set, just details ---------- */
 
 function OtherDeviceDialog({
+    rooms,
     device,
     onClose,
-    onRemoved,
+    onSaved,
 }: {
+    rooms: Room[];
     device: Device;
     onClose: () => void;
-    onRemoved: () => Promise<void>;
+    onSaved: () => Promise<void>;
 }) {
+    const [details, setDetails] = useState<DeviceDetails>(initialDetails(device));
     const [confirmingRemove, setConfirmingRemove] = useState(false);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
@@ -539,41 +612,72 @@ function OtherDeviceDialog({
         setError('');
         try {
             await api.deleteDevice(device.id);
-            await onRemoved();
+            await onSaved();
         } catch (caught) {
             setError(caught instanceof Error ? caught.message : 'Could not remove the device.');
             setBusy(false);
         }
     };
 
+    const save = async (formEvent: FormEvent<HTMLFormElement>) => {
+        formEvent.preventDefault();
+        if (!detailsChanged(device, details)) return onClose();
+        setBusy(true);
+        setError('');
+        try {
+            await saveDetails(device, details);
+            await onSaved();
+        } catch (caught) {
+            setError(caught instanceof Error ? caught.message : 'Could not save the device.');
+            setBusy(false);
+        }
+    };
+
     return (
         <Dialog title={device.name} onClose={onClose}>
-            <div className="device-summary">
-                <span className="type-icon">
-                    <Icon icon={TYPE_ICONS[device.type]} />
-                </span>
-                <dl>
-                    <dt>Type</dt>
-                    <dd>{TYPE_NAMES[device.type]}</dd>
-                    <dt>Room</dt>
-                    <dd>{device.room.name}</dd>
-                    <dt>Hardware ID</dt>
-                    <dd>{device.hardwareId ?? 'Not set'}</dd>
-                </dl>
-            </div>
-            <p className="field-hint">
-                {TYPE_NAMES[device.type]}s don't light up. Beacon uses them to hear or capture sounds.
-            </p>
+            <form className="dialog-form" onSubmit={save}>
+                <div className="device-summary">
+                    <span className="type-icon">
+                        <Icon icon={TYPE_ICONS[device.type]} />
+                    </span>
+                    <dl>
+                        <dt>Type</dt>
+                        <dd>{TYPE_NAMES[device.type]}</dd>
+                        <dt>Room</dt>
+                        <dd>{device.room.name}</dd>
+                        <dt>Hardware ID</dt>
+                        <dd>{device.hardwareId ?? 'Not set'}</dd>
+                    </dl>
+                </div>
+                <p className="field-hint">
+                    {TYPE_NAMES[device.type]}s don't light up. Beacon uses them to hear or capture sounds.
+                </p>
 
-            <div className="dialog-actions">
-                <button className="btn btn-danger" type="button" onClick={() => setConfirmingRemove(true)}>
-                    Remove device
-                </button>
-                <span className="spacer" />
-                <button className="btn btn-primary" type="button" onClick={onClose}>
-                    Done
-                </button>
-            </div>
+                <DeviceDetailsFields rooms={rooms} value={details} onChange={setDetails} />
+
+                {error && !confirmingRemove && (
+                    <p className="form-error" role="alert">
+                        {error}
+                    </p>
+                )}
+                <div className="dialog-actions">
+                    <button
+                        className="btn btn-danger"
+                        type="button"
+                        onClick={() => setConfirmingRemove(true)}
+                        disabled={busy}
+                    >
+                        Remove device
+                    </button>
+                    <span className="spacer" />
+                    <button className="btn btn-secondary" type="button" onClick={onClose}>
+                        Cancel
+                    </button>
+                    <button className="btn btn-primary" type="submit" disabled={busy}>
+                        {busy ? 'Saving…' : 'Save'}
+                    </button>
+                </div>
+            </form>
 
             {confirmingRemove && (
                 <ConfirmDialog

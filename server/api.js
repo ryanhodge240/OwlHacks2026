@@ -275,6 +275,18 @@ async function loadEvents(db, userId, eventId = null) {
     return result.rows.map(publicEvent);
 }
 
+// Device names must be unique per user, ignoring case and surrounding spaces.
+// excludeId skips the device being renamed, so saving its own name unchanged still works.
+async function assertUniqueDeviceName(db, userId, name, excludeId = null) {
+    const result = await db.query(
+        `SELECT id FROM device
+         WHERE user_id = $1 AND LOWER(TRIM(name)) = LOWER($2) AND ($3::BIGINT IS NULL OR id <> $3)
+         LIMIT 1`,
+        [userId, name.trim(), excludeId],
+    );
+    if (result.rows[0]) fail(409, `You already have a device named "${name.trim()}". Choose a different name.`);
+}
+
 async function assertRoom(db, userId, roomId) {
     const result = await db.query('SELECT id FROM room WHERE id = $1 AND user_id = $2', [roomId, userId]);
     if (!result.rows[0]) fail(404, 'Room not found.');
@@ -538,6 +550,7 @@ function registerApi(app, { pool, currentUser }) {
             const roomId = parseId(request.body.roomId, 'room');
             const hardwareId = parseHardwareId(request.body.hardwareId);
             await assertRoom(pool, user.id, roomId);
+            await assertUniqueDeviceName(pool, user.id, name);
 
             const result = await pool.query(
                 `INSERT INTO device (user_id, name, type, room_id, device_id)
@@ -569,6 +582,7 @@ function registerApi(app, { pool, currentUser }) {
             const roomId = body.roomId !== undefined ? parseId(body.roomId, 'room') : existing.room.id;
             const hardwareId = body.hardwareId !== undefined ? parseHardwareId(body.hardwareId) : existing.hardwareId;
             if (body.roomId !== undefined) await assertRoom(pool, user.id, roomId);
+            if (body.name !== undefined) await assertUniqueDeviceName(pool, user.id, name, id);
 
             await pool.query(
                 'UPDATE device SET name = $1, room_id = $2, device_id = $3 WHERE id = $4 AND user_id = $5',
