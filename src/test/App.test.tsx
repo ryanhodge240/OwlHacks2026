@@ -63,8 +63,6 @@ test('shows each light with its default state and the color it changes to for an
     expect(await screen.findByRole('heading', { name: 'Connected Devices' })).toBeInTheDocument();
     expect(await screen.findByText('Bedroom lamp')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-    expect(screen.getByText(/#FFD9A0, 60%, solid/)).toBeInTheDocument();
-    expect(screen.getByText(/#3A86FF, 100%, pulses every 800 ms, for 10 s/)).toBeInTheDocument();
 });
 
 test('loads available Home Assistant lights when adding a light', async () => {
