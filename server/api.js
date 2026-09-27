@@ -1,4 +1,5 @@
 const { TRIGGER_TYPES, TRIGGER_TYPES_LABELS, DEVICE_TYPES } = require('./enums.js');
+const { logEvent } = require('./logger.js');
 const crypto = require('node:crypto');
 
 // Limits shared by validation and the frontend (exposed through /api/meta).
@@ -279,6 +280,7 @@ function registerApi(app, { pool, currentUser }) {
             try {
                 const user = auth ? await currentUser(request) : null;
                 if (auth && !user) return response.status(401).json({ error: 'You must be signed in.' });
+                request.authenticatedUser = user;
                 return await handler(request, response, user);
             } catch (error) {
                 if (error instanceof ApiError) return response.status(error.status).json({ error: error.message });
@@ -319,6 +321,7 @@ function registerApi(app, { pool, currentUser }) {
                 user.id,
                 name,
             ]);
+            logEvent('room_created', { userId: user.id, roomId: result.rows[0].id, name });
             return response.status(201).json({ room: publicRoom(result.rows[0]) });
         }),
     );
@@ -335,6 +338,7 @@ function registerApi(app, { pool, currentUser }) {
             ]);
             if (!result.rows[0]) fail(404, 'Room not found.');
             const room = (await loadRooms(pool, user.id)).find((item) => item.id === id);
+            logEvent('room_updated', { userId: user.id, roomId: id, name });
             return response.json({ room });
         }),
     );
@@ -349,6 +353,7 @@ function registerApi(app, { pool, currentUser }) {
             ]);
             if (Number(used.rows[0].count) > 0) fail(409, 'Move or remove the devices in this room first.');
             await pool.query('DELETE FROM room WHERE id = $1 AND user_id = $2', [id, user.id]);
+            logEvent('room_deleted', { userId: user.id, roomId: id });
             return response.status(204).end();
         }),
     );
@@ -385,6 +390,14 @@ function registerApi(app, { pool, currentUser }) {
                 [user.id, name, type, roomId, hardwareId],
             );
             const [device] = await loadDevices(pool, user.id, result.rows[0].id);
+            logEvent('device_created', {
+                userId: user.id,
+                deviceId: result.rows[0].id,
+                name,
+                type,
+                roomId,
+                hasHardwareId: Boolean(hardwareId),
+            });
             return response.status(201).json({ device });
         }),
     );
@@ -407,6 +420,13 @@ function registerApi(app, { pool, currentUser }) {
                 [name, roomId, hardwareId, id, user.id],
             );
             const [device] = await loadDevices(pool, user.id, id);
+            logEvent('device_updated', {
+                userId: user.id,
+                deviceId: id,
+                name,
+                roomId,
+                hasHardwareId: Boolean(hardwareId),
+            });
             return response.json({ device });
         }),
     );
@@ -416,6 +436,7 @@ function registerApi(app, { pool, currentUser }) {
         route(async (request, response, user) => {
             const id = parseId(request.params.id, 'device');
             await pool.query('DELETE FROM device WHERE id = $1 AND user_id = $2', [id, user.id]);
+            logEvent('device_deleted', { userId: user.id, deviceId: id });
             return response.status(204).end();
         }),
     );
@@ -446,6 +467,7 @@ function registerApi(app, { pool, currentUser }) {
             });
 
             const [device] = await loadDevices(pool, user.id, id);
+            logEvent('device_default_state_updated', { userId: user.id, deviceId: id });
             return response.json({ device });
         }),
     );
@@ -461,6 +483,7 @@ function registerApi(app, { pool, currentUser }) {
             );
             const [device] = await loadDevices(pool, user.id, id);
             if (!device) fail(404, 'Device not found.');
+            logEvent('device_default_state_deleted', { userId: user.id, deviceId: id });
             return response.json({ device });
         }),
     );
@@ -515,6 +538,12 @@ function registerApi(app, { pool, currentUser }) {
             });
 
             const [created] = await loadEvents(pool, user.id, id);
+            logEvent('event_created', {
+                userId: user.id,
+                eventId: id,
+                trigger: event.trigger,
+                deviceCount: deviceIds.length,
+            });
             return response.status(201).json({ event: created });
         }),
     );
@@ -556,6 +585,12 @@ function registerApi(app, { pool, currentUser }) {
             });
 
             const [updated] = await loadEvents(pool, user.id, id);
+            logEvent('event_updated', {
+                userId: user.id,
+                eventId: id,
+                trigger: event.trigger,
+                deviceCount: deviceIds?.length,
+            });
             return response.json({ event: updated });
         }),
     );
@@ -565,6 +600,7 @@ function registerApi(app, { pool, currentUser }) {
         route(async (request, response, user) => {
             const id = parseId(request.params.id, 'event');
             await pool.query('DELETE FROM event WHERE id = $1 AND user_id = $2', [id, user.id]);
+            logEvent('event_deleted', { userId: user.id, eventId: id });
             return response.status(204).end();
         }),
     );
@@ -581,6 +617,7 @@ function registerApi(app, { pool, currentUser }) {
                 const apiKeyAuthorized = hasTriggerApiKey(request);
                 const user = apiKeyAuthorized ? null : await currentUser(request);
                 if (!apiKeyAuthorized && !user) return response.status(401).json({ error: 'You must be signed in.' });
+                request.authenticatedUser = user;
 
                 const trigger = request.params.trigger;
                 if (!TRIGGER_TYPES.includes(trigger)) fail(404, 'Unknown trigger.');
@@ -657,6 +694,13 @@ function registerApi(app, { pool, currentUser }) {
                         triggerTimers.set(command.hardwareId, timer);
                     }),
                 );
+
+                logEvent('trigger_executed', {
+                    userId: user?.id || null,
+                    trigger,
+                    commandCount: commands.length,
+                    authorization: apiKeyAuthorized ? 'trigger_api_key' : 'session',
+                });
 
                 return response.json({
                     trigger,

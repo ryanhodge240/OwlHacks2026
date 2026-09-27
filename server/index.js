@@ -1,5 +1,6 @@
 const { TRIGGER_TYPES, DEVICE_TYPES } = require('./enums.js');
 const { registerApi } = require('./api.js');
+const { logEvent } = require('./logger.js');
 const crypto = require('node:crypto');
 const path = require('node:path');
 
@@ -116,6 +117,22 @@ const authLimiter = rateLimit({
 
 app.set('trust proxy', 1);
 app.use(express.json({ limit: '10kb' }));
+app.use('/api', (request, response, next) => {
+    response.once('finish', () => {
+        if (request.originalUrl.split('?')[0] === '/api/health') return;
+        if (response.statusCode < 200 || response.statusCode >= 400) return;
+
+        logEvent('api_request', {
+            method: request.method,
+            path: request.originalUrl.split('?')[0],
+            status: response.statusCode,
+            durationMs: Date.now() - request.startedAt,
+            userId: request.authenticatedUser?.id || null,
+        });
+    });
+    request.startedAt = Date.now();
+    next();
+});
 
 app.get('/api/health', async (_request, response) => {
     try {
@@ -148,6 +165,10 @@ app.post('/api/auth/register', authLimiter, async (request, response) => {
         );
         const token = await createSession(result.rows[0].id);
         setSessionCookie(response, token);
+        logEvent('user_registered', {
+            userId: result.rows[0].id,
+            username: result.rows[0].username,
+        });
         return response.status(201).json({ user: publicUser(result.rows[0]) });
     } catch (error) {
         if (error.code === '23505') {
@@ -173,6 +194,10 @@ app.post('/api/auth/login', authLimiter, async (request, response) => {
 
     const token = await createSession(user.id);
     setSessionCookie(response, token);
+    logEvent('user_logged_in', {
+        userId: user.id,
+        username: user.username,
+    });
     return response.json({ user: publicUser(user) });
 });
 
@@ -180,11 +205,13 @@ app.post('/api/auth/logout', async (request, response) => {
     const token = readCookie(request, sessionCookie);
     if (token) await pool.query('DELETE FROM sessions WHERE token_hash = $1', [hashSession(token)]);
     clearSessionCookie(response);
+    logEvent('user_logged_out');
     response.status(204).end();
 });
 
 app.get('/api/auth/me', async (request, response) => {
     const user = await currentUser(request);
+    request.authenticatedUser = user;
     response.json({ user: user ? publicUser(user) : null });
 });
 
@@ -259,7 +286,9 @@ async function start() {
   `);
 
     await pool.query('DELETE FROM sessions WHERE expires_at <= NOW()');
-    app.listen(port, () => console.log(`Owl Hacks server listening on port ${port}`));
+    app.listen(port, () => {
+        logEvent('server_started', { port });
+    });
 }
 
 start().catch((error) => {
