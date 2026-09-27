@@ -14,16 +14,23 @@ const SWATCHES = [
 ];
 
 const PULSES = [
-    { value: 0, name: 'Steady' },
+    { value: 0, name: 'Solid' },
     { value: 1500, name: 'Slow' },
     { value: 800, name: 'Medium' },
     { value: 300, name: 'Fast' },
 ];
 
-type Props = { value: LightDraft; onChange: (value: LightDraft) => void; limits: Meta['limits']; idPrefix: string };
+type Props = {
+    value: LightDraft;
+    onChange: (value: LightDraft) => void;
+    limits: Meta['limits'];
+    idPrefix: string;
+    /** Events can pulse; a light's everyday look is always solid, so it hides this. */
+    showPulse?: boolean;
+};
 
-/** Color, brightness and pulse controls with a live preview, shared by default states and events. */
-export default function LightStateFields({ value, onChange, limits, idPrefix }: Props) {
+/** Color, brightness and (optionally) pulse controls with a live preview. */
+export default function LightStateFields({ value, onChange, limits, idPrefix, showPulse = true }: Props) {
     const set = (patch: Partial<LightDraft>) => onChange({ ...value, ...patch });
 
     return (
@@ -32,8 +39,12 @@ export default function LightStateFields({ value, onChange, limits, idPrefix }: 
                 <LightOrb state={value} />
                 <p>
                     {value.brightness}% brightness
-                    <br />
-                    {describePulse(value.pulse)}
+                    {showPulse && (
+                        <>
+                            <br />
+                            {describePulse(value.pulse)}
+                        </>
+                    )}
                 </p>
             </div>
 
@@ -80,35 +91,37 @@ export default function LightStateFields({ value, onChange, limits, idPrefix }: 
                     </div>
                 </div>
 
-                <fieldset className="state-group">
-                    <legend className="field-label">Pulse</legend>
-                    <div className="segmented">
-                        {PULSES.map((pulse) => (
-                            <button
-                                key={pulse.value}
-                                type="button"
-                                aria-pressed={value.pulse === pulse.value}
-                                onClick={() => set({ pulse: pulse.value })}
-                            >
-                                {pulse.name}
-                            </button>
-                        ))}
-                    </div>
-                    <label className="inline-number" htmlFor={`${idPrefix}-pulse`}>
-                        Cycle length
-                        <input
-                            id={`${idPrefix}-pulse`}
-                            className="input"
-                            type="number"
-                            min={limits.pulse.min}
-                            max={limits.pulse.max}
-                            step={50}
-                            value={value.pulse}
-                            onChange={(event) => set({ pulse: Number(event.target.value) })}
-                        />
-                        ms
-                    </label>
-                </fieldset>
+                {showPulse && (
+                    <fieldset className="state-group">
+                        <legend className="field-label">Pulse</legend>
+                        <div className="segmented">
+                            {PULSES.map((pulse) => (
+                                <button
+                                    key={pulse.value}
+                                    type="button"
+                                    aria-pressed={value.pulse === pulse.value}
+                                    onClick={() => set({ pulse: pulse.value })}
+                                >
+                                    {pulse.name}
+                                </button>
+                            ))}
+                        </div>
+                        <label className="inline-number" htmlFor={`${idPrefix}-pulse`}>
+                            Cycle length
+                            <input
+                                id={`${idPrefix}-pulse`}
+                                className="input"
+                                type="number"
+                                min={limits.pulse.min}
+                                max={limits.pulse.max}
+                                step={50}
+                                value={value.pulse}
+                                onChange={(event) => set({ pulse: Number(event.target.value) })}
+                            />
+                            ms
+                        </label>
+                    </fieldset>
+                )}
             </div>
         </div>
     );

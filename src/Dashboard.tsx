@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { FiPlay } from 'react-icons/fi';
+import { FiPlay, FiSquare } from 'react-icons/fi';
 import { api } from './api';
 import DevicesView, { Preview } from './components/DevicesView';
 import EventsView from './components/EventsView';
@@ -7,7 +7,7 @@ import Icon from './components/Icon';
 import RoomsView from './components/RoomsView';
 import ThemeToggle from './components/ThemeToggle';
 import BeaconLogo from './img/beacon-logo-clear.png';
-import { BeaconEvent, Device, DeviceEvent, LightState, Meta, Room, TriggerResult, User } from './types';
+import { BeaconEvent, Device, Meta, Room, TriggerResult, User } from './types';
 import './Dashboard.css';
 
 type Tab = 'devices' | 'events' | 'rooms';
@@ -16,8 +16,14 @@ const TABS: { id: Tab; name: string; title: string }[] = [
     { id: 'events', name: 'Events', title: 'Sound Events' },
     { id: 'rooms', name: 'Rooms', title: 'Rooms' },
 ];
-/** Previews run for the event's length, capped so a 10-minute alert doesn't take over the dashboard. */
-const MAX_PREVIEW_MS = 8000;
+
+/** A test never shows for longer than this, so a 10-minute alert doesn't take over the dashboard. */
+const MAX_TEST_MS = 8000;
+/** Used when the server sends no usable length, and for "no lights respond" messages. */
+const DEFAULT_TEST_MS = 5000;
+
+const testLength = (seconds: number) =>
+    Number.isFinite(seconds) && seconds > 0 ? Math.min(seconds * 1000, MAX_TEST_MS) : DEFAULT_TEST_MS;
 
 type Props = { user: User; onLogout: () => void };
 
@@ -32,7 +38,7 @@ export default function Dashboard({ user, onLogout }: Props) {
     const [testTrigger, setTestTrigger] = useState('');
     const [testResult, setTestResult] = useState<TriggerResult | null>(null);
     const [testError, setTestError] = useState('');
-    const timers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
+    const testTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
     const refresh = useCallback(async () => {
         try {
@@ -56,54 +62,52 @@ export default function Dashboard({ user, onLogout }: Props) {
         refresh();
     }, [refresh]);
 
-    useEffect(() => {
-        const pending = timers.current;
-        return () => Object.values(pending).forEach(clearTimeout);
+    /** Ends a test: clears the highlighted rows and the message together. */
+    const endTest = useCallback(() => {
+        clearTimeout(testTimer.current);
+        testTimer.current = undefined;
+        setPreviews({});
+        setTestResult(null);
     }, []);
 
-    const showPreview = useCallback((deviceId: number, state: LightState, label: string, seconds: number) => {
-        clearTimeout(timers.current[deviceId]);
-        setPreviews((current) => ({ ...current, [deviceId]: { state, label } }));
-        timers.current[deviceId] = setTimeout(
-            () =>
-                setPreviews((current) => {
-                    const { [deviceId]: _done, ...rest } = current;
-                    return rest;
-                }),
-            Math.min(seconds * 1000, MAX_PREVIEW_MS),
-        );
-    }, []);
-
-    const previewEvent = (deviceId: number, event: DeviceEvent) =>
-        showPreview(deviceId, event, event.name || event.triggerLabel, event.eventLength);
+    // Don't leave a timer running if the dashboard closes (e.g. on logout).
+    useEffect(() => () => clearTimeout(testTimer.current), []);
 
     const runTest = async () => {
+        endTest();
         setTestError('');
         try {
             const result = await api.trigger(testTrigger);
-            setTestResult(result);
             setTab('devices');
-            result.commands.forEach((command) =>
-                showPreview(
-                    command.deviceId,
-                    command.alertState,
-                    command.eventName || result.triggerLabel,
-                    command.durationSeconds,
-                ),
-            );
+
+            const next: Record<number, Preview> = {};
+            let longest = 0;
+            result.commands.forEach((command) => {
+                next[command.deviceId] = {
+                    state: command.alertState,
+                    label: command.eventName || result.triggerLabel,
+                };
+                longest = Math.max(longest, testLength(command.durationSeconds));
+            });
+
+            setPreviews(next);
+            setTestResult(result);
+            testTimer.current = setTimeout(endTest, longest || DEFAULT_TEST_MS);
         } catch (error) {
             setTestError(error instanceof Error ? error.message : 'Could not run the test.');
         }
     };
+
+    const testing = testResult !== null;
 
     const testMessage =
         testError ||
         (testResult &&
             (testResult.commands.length === 0
                 ? `No lights respond to ${testResult.triggerLabel.toLowerCase()} yet.`
-                : `${testResult.triggerLabel}: ${testResult.commands.length} ${
+                : `Showing ${testResult.triggerLabel.toLowerCase()} on ${testResult.commands.length} ${
                       testResult.commands.length === 1 ? 'light' : 'lights'
-                  } changed.`));
+                  }.`));
 
     const current = TABS.find((item) => item.id === tab) ?? TABS[0];
 
@@ -154,6 +158,7 @@ export default function Dashboard({ user, onLogout }: Props) {
                                 className="input"
                                 value={testTrigger}
                                 onChange={(event) => setTestTrigger(event.target.value)}
+                                disabled={testing}
                             >
                                 {meta.triggerTypes.map((type) => (
                                     <option key={type.value} value={type.value}>
@@ -161,9 +166,15 @@ export default function Dashboard({ user, onLogout }: Props) {
                                     </option>
                                 ))}
                             </select>
-                            <button className="btn btn-secondary" type="button" onClick={runTest}>
-                                <Icon icon={FiPlay} /> Play
-                            </button>
+                            {testing ? (
+                                <button className="btn btn-primary" type="button" onClick={endTest}>
+                                    <Icon icon={FiSquare} /> Stop
+                                </button>
+                            ) : (
+                                <button className="btn btn-secondary" type="button" onClick={runTest}>
+                                    <Icon icon={FiPlay} /> Play
+                                </button>
+                            )}
                         </div>
                     )}
                 </div>
@@ -185,8 +196,8 @@ export default function Dashboard({ user, onLogout }: Props) {
                         meta={meta}
                         rooms={rooms}
                         devices={devices}
+                        events={events}
                         previews={previews}
-                        onPreview={previewEvent}
                         onChanged={refresh}
                         onGoToEvents={() => setTab('events')}
                     />

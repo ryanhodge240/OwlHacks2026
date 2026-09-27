@@ -6,6 +6,8 @@
  */
 
 .dashboard {
+    display: flex;
+    flex-direction: column;
     min-height: 100vh;
     min-height: 100dvh;
     background: var(--bg);
@@ -58,7 +60,17 @@
 /* ---------- Page body ---------- */
 
 .dash-main {
-    padding: 0.75rem var(--gutter) 3rem;
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    padding: 0.75rem var(--gutter) 1.25rem;
+}
+
+/* Each tab stretches to fill the rest of the page */
+.dash-main > section {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
 }
 
 .page-head {
@@ -89,7 +101,13 @@
     height: 2.4rem;
 }
 
+.test-sound .input:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
 .test-sound .btn {
+    min-width: 5.5rem;
     padding-block: 0.45rem;
 }
 
@@ -120,6 +138,7 @@
     gap: 1rem clamp(1rem, 2vw, 1.75rem);
     margin-bottom: 1rem;
     padding: 1rem 1.25rem 1.15rem;
+    border: var(--border);
     border-radius: 0.5rem;
     background: var(--panel);
 }
@@ -142,7 +161,10 @@
 /* ---------- Table ---------- */
 
 .table-frame {
-    min-height: clamp(16rem, 55vh, 36rem);
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 16rem;
     overflow-x: auto;
     border: var(--border);
     border-radius: 0.5rem;
@@ -150,6 +172,7 @@
 }
 
 .data-table {
+    flex: 0 0 auto;
     width: 100%;
     /* below this the table scrolls sideways instead of squashing */
     min-width: 40rem;
@@ -182,7 +205,7 @@
     font-weight: 500;
 }
 
-/* A light that is showing an alert preview */
+/* A light that a test sound just changed */
 .data-table tbody tr.is-previewing {
     background: var(--highlight);
 }
@@ -235,7 +258,7 @@
     box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
 }
 
-/* Event names in the Devices table: click one to preview it on the light */
+/* Event names in the Devices table */
 .event-links {
     display: flex;
     flex-wrap: wrap;
@@ -246,20 +269,14 @@
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
-    padding: 0;
-    border: 0;
-    background: none;
     font-weight: 500;
-}
-
-.event-link:hover {
-    color: var(--accent-text);
-    text-decoration: underline;
 }
 
 /* Empty table / no matches: sits in the grey area under the header */
 .table-empty {
     display: grid;
+    flex: 1;
+    align-content: center;
     justify-items: center;
     gap: 0.5rem;
     padding: 3rem 1.5rem;
@@ -281,7 +298,7 @@
     margin-top: 0.5rem;
 }
 
-/* ---------- Device details dialog ---------- */
+/* ---------- Device details (microphones, speakers, cameras) ---------- */
 
 .device-summary {
     display: flex;
@@ -316,14 +333,92 @@
     font-weight: 600;
 }
 
-.state-line {
-    display: flex;
-    align-items: center;
-    gap: 0.55rem;
-    margin-bottom: 0.6rem;
+/* ---------- Light settings dialog: two numbered steps ---------- */
+
+.settings-step {
+    padding-top: 1.25rem;
+    border-top: var(--border);
 }
 
-.preview-list {
+.settings-step + .settings-step {
+    margin-top: 1.5rem;
+}
+
+.settings-step-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.settings-step-head .dialog-section-title {
+    margin-bottom: 0.15rem;
+}
+
+.step-number {
+    display: inline-grid;
+    width: 1.75rem;
+    height: 1.75rem;
+    flex: 0 0 auto;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--red);
+    color: var(--on-red);
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+.settings-step-body {
+    margin-top: 1rem;
+}
+
+/* "Stay on" / "Stay off" cards */
+.choice-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.6rem;
+}
+
+.choice {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.75rem 0.9rem;
+    border-radius: var(--radius);
+    background: var(--panel);
+    box-shadow: inset 0 0 0 2px transparent;
+    cursor: pointer;
+}
+
+.choice.is-selected {
+    box-shadow: inset 0 0 0 2px var(--accent-text);
+}
+
+.choice input {
+    width: 1.1rem;
+    height: 1.1rem;
+    flex: 0 0 auto;
+    accent-color: var(--red);
+}
+
+.choice span,
+.event-pick-text {
+    display: grid;
+    min-width: 0;
+}
+
+.choice strong,
+.event-pick-text strong {
+    font-weight: 600;
+}
+
+.choice small,
+.event-pick-text small {
+    color: var(--muted);
+}
+
+/* Events this light reacts to */
+.event-pick-list {
     display: grid;
     gap: 0.4rem;
     margin: 0;
@@ -331,27 +426,34 @@
     list-style: none;
 }
 
-.preview-item {
+.event-pick {
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    padding: 0.6rem 0.75rem;
+    padding: 0.55rem 0.75rem;
     border-radius: var(--radius);
     background: var(--panel);
+    box-shadow: inset 0 0 0 2px transparent;
 }
 
-.preview-item-text {
-    display: grid;
+.event-pick.is-selected {
+    box-shadow: inset 0 0 0 2px var(--accent-text);
+}
+
+.event-pick-main {
+    display: flex;
     min-width: 0;
     flex: 1;
+    align-items: center;
+    gap: 0.75rem;
+    cursor: pointer;
 }
 
-.preview-item-text strong {
-    font-weight: 600;
-}
-
-.preview-item-text small {
-    color: var(--muted);
+.event-pick-main input {
+    width: 1.1rem;
+    height: 1.1rem;
+    flex: 0 0 auto;
+    accent-color: var(--red);
 }
 
 /* ---------- Tablets and phones ---------- */
@@ -399,5 +501,9 @@
 
     .test-sound .input {
         flex: 1;
+    }
+
+    .choice-row {
+        grid-template-columns: 1fr;
     }
 }

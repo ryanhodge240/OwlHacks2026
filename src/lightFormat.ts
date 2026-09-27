@@ -1,7 +1,7 @@
 import { LightState } from './types';
 
 export function describePulse(pulse: number): string {
-    if (pulse <= 0) return 'Steady';
+    if (pulse <= 0) return 'Solid';
     if (pulse < 1000) return `Pulses every ${pulse} ms`;
     return `Pulses every ${(pulse / 1000).toFixed(pulse % 1000 === 0 ? 0 : 1)} s`;
 }

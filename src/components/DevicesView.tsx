@@ -2,8 +2,9 @@ import { FormEvent, useMemo, useState } from 'react';
 import { FiCamera, FiMic, FiPlus, FiSpeaker, FiSun } from 'react-icons/fi';
 import { IconType } from 'react-icons';
 import { api } from '../api';
-import { describeLength, describePulse, describeState } from '../lightFormat';
-import { Device, DeviceEvent, DeviceType, LightDraft, LightState, Meta, Room } from '../types';
+import { describeLength, describePulse } from '../lightFormat';
+import { BeaconEvent, Device, DeviceType, LightDraft, LightState, Meta, Room } from '../types';
+import ConfirmDialog from './ConfirmDialog';
 import Dialog from './Dialog';
 import Icon from './Icon';
 import LightOrb from './LightOrb';
@@ -22,23 +23,26 @@ const TYPE_NAMES: Record<DeviceType, string> = {
     camera: 'Camera',
 };
 const NEW_ROOM = 'new';
-const FALLBACK_DEFAULT: LightDraft = { colorHex: '#ffd9a0', brightness: 60, pulse: 0 };
+/** A light's everyday look is always solid (pulse 0). */
+const FALLBACK_LOOK: LightDraft = { colorHex: '#ffd9a0', brightness: 60, pulse: 0 };
 
+/** What a light is showing during a "Test a sound" run. */
 export type Preview = { state: LightState; label: string };
 
-type DialogState = { kind: 'add' } | { kind: 'details'; deviceId: number } | { kind: 'default'; device: Device } | null;
+/** Which pop-up is open. `isNew` shows a short welcome line after adding a light. */
+type DialogState = { kind: 'add' } | { kind: 'edit'; device: Device; isNew?: boolean } | null;
 
 type Props = {
     meta: Meta;
     rooms: Room[];
     devices: Device[];
+    events: BeaconEvent[];
     previews: Record<number, Preview>;
-    onPreview: (deviceId: number, event: DeviceEvent) => void;
     onChanged: () => Promise<void>;
     onGoToEvents: () => void;
 };
 
-export default function DevicesView({ meta, rooms, devices, previews, onPreview, onChanged, onGoToEvents }: Props) {
+export default function DevicesView({ meta, rooms, devices, events, previews, onChanged, onGoToEvents }: Props) {
     const [query, setQuery] = useState('');
     const [trigger, setTrigger] = useState('');
     const [roomId, setRoomId] = useState('');
@@ -60,7 +64,9 @@ export default function DevicesView({ meta, rooms, devices, previews, onPreview,
         setRoomId('');
     };
 
-    const detailsDevice = dialog?.kind === 'details' ? devices.find((device) => device.id === dialog.deviceId) : null;
+    // Always edit the freshest copy of the device (it changes after saves and refreshes).
+    const editing =
+        dialog?.kind === 'edit' ? (devices.find((device) => device.id === dialog.device.id) ?? dialog.device) : null;
 
     return (
         <section aria-label="Devices">
@@ -140,8 +146,7 @@ export default function DevicesView({ meta, rooms, devices, previews, onPreview,
                                 key={device.id}
                                 device={device}
                                 preview={previews[device.id]}
-                                onPreview={(event) => onPreview(device.id, event)}
-                                onEdit={() => setDialog({ kind: 'details', deviceId: device.id })}
+                                onEdit={() => setDialog({ kind: 'edit', device })}
                             />
                         ))}
                     </tbody>
@@ -159,7 +164,6 @@ export default function DevicesView({ meta, rooms, devices, previews, onPreview,
                     ) : (
                         <div className="table-empty">
                             <h3>No devices yet</h3>
-                            <p>Add a light and pick the room it lives in. You can set its resting color right after.</p>
                             <button
                                 className="btn btn-primary"
                                 type="button"
@@ -178,40 +182,39 @@ export default function DevicesView({ meta, rooms, devices, previews, onPreview,
                     onClose={() => setDialog(null)}
                     onAdded={async (device) => {
                         await onChanged();
-                        setDialog(device.type === 'light' ? { kind: 'default', device } : null);
+                        // Lights go straight to their settings; other devices are done.
+                        setDialog(device.type === 'light' ? { kind: 'edit', device, isNew: true } : null);
                     }}
                 />
             )}
 
-            {detailsDevice && (
-                <DeviceDialog
-                    device={detailsDevice}
-                    preview={previews[detailsDevice.id]}
-                    onPreview={(event) => onPreview(detailsDevice.id, event)}
-                    onEditDefault={() => setDialog({ kind: 'default', device: detailsDevice })}
-                    onGoToEvents={() => {
-                        setDialog(null);
-                        onGoToEvents();
-                    }}
-                    onClose={() => setDialog(null)}
-                    onRemoved={async () => {
-                        setDialog(null);
-                        await onChanged();
-                    }}
-                />
-            )}
-
-            {dialog?.kind === 'default' && (
-                <DefaultStateDialog
-                    meta={meta}
-                    device={dialog.device}
-                    onClose={() => setDialog(null)}
-                    onSaved={async () => {
-                        setDialog(null);
-                        await onChanged();
-                    }}
-                />
-            )}
+            {editing &&
+                (editing.type === 'light' ? (
+                    <LightSettingsDialog
+                        meta={meta}
+                        device={editing}
+                        events={events}
+                        isNew={dialog?.kind === 'edit' && Boolean(dialog.isNew)}
+                        onGoToEvents={() => {
+                            setDialog(null);
+                            onGoToEvents();
+                        }}
+                        onClose={() => setDialog(null)}
+                        onSaved={async () => {
+                            setDialog(null);
+                            await onChanged();
+                        }}
+                    />
+                ) : (
+                    <OtherDeviceDialog
+                        device={editing}
+                        onClose={() => setDialog(null)}
+                        onRemoved={async () => {
+                            setDialog(null);
+                            await onChanged();
+                        }}
+                    />
+                ))}
         </section>
     );
 }
@@ -221,11 +224,10 @@ export default function DevicesView({ meta, rooms, devices, previews, onPreview,
 type RowProps = {
     device: Device;
     preview?: Preview;
-    onPreview: (event: DeviceEvent) => void;
     onEdit: () => void;
 };
 
-function DeviceRow({ device, preview, onPreview, onEdit }: RowProps) {
+function DeviceRow({ device, preview, onEdit }: RowProps) {
     const isLight = device.type === 'light';
 
     return (
@@ -237,7 +239,7 @@ function DeviceRow({ device, preview, onPreview, onEdit }: RowProps) {
                             state={preview?.state ?? device.defaultState}
                             size="small"
                             alerting={Boolean(preview)}
-                            label={preview ? `Showing ${preview.label}` : 'Resting state'}
+                            label={preview ? `Showing ${preview.label}` : 'Everyday look'}
                         />
                     ) : (
                         <span className="type-icon">
@@ -261,16 +263,10 @@ function DeviceRow({ device, preview, onPreview, onEdit }: RowProps) {
                 ) : (
                     <div className="event-links">
                         {device.events.map((event) => (
-                            <button
-                                key={event.id}
-                                type="button"
-                                className="event-link"
-                                onClick={() => onPreview(event)}
-                                title={`Preview on ${device.name}`}
-                            >
+                            <span key={event.id} className="event-link">
                                 <span className="color-dot" style={{ background: event.colorHex }} />
                                 {event.name || event.triggerLabel}
-                            </button>
+                            </span>
                         ))}
                     </div>
                 )}
@@ -284,31 +280,260 @@ function DeviceRow({ device, preview, onPreview, onEdit }: RowProps) {
     );
 }
 
-/* ---------- Device details (the "Edit" dialog) ---------- */
+/* ---------- Light settings: everyday look + which events it reacts to ---------- */
 
-function DeviceDialog({
+function LightSettingsDialog({
+    meta,
     device,
-    preview,
-    onPreview,
-    onEditDefault,
+    events,
+    isNew,
     onGoToEvents,
+    onClose,
+    onSaved,
+}: {
+    meta: Meta;
+    device: Device;
+    events: BeaconEvent[];
+    isNew: boolean;
+    onGoToEvents: () => void;
+    onClose: () => void;
+    onSaved: () => Promise<void>;
+}) {
+    const saved = device.defaultState;
+    // New lights start "on" so the colour picker is the first thing you see.
+    const [staysOn, setStaysOn] = useState(isNew || Boolean(saved));
+    const [look, setLook] = useState<LightDraft>(
+        saved ? { colorHex: saved.colorHex, brightness: saved.brightness, pulse: 0 } : FALLBACK_LOOK,
+    );
+    const initiallyLinked = useMemo(
+        () => events.filter((event) => event.deviceIds.includes(device.id)).map((event) => event.id),
+        [events, device.id],
+    );
+    const [linked, setLinked] = useState<number[]>(initiallyLinked);
+    const [confirmingRemove, setConfirmingRemove] = useState(false);
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState('');
+
+    const toggleEvent = (id: number) =>
+        setLinked((current) => (current.includes(id) ? current.filter((value) => value !== id) : [...current, id]));
+
+    const save = async (formEvent: FormEvent<HTMLFormElement>) => {
+        formEvent.preventDefault();
+        setBusy(true);
+        setError('');
+        try {
+            // 1. Everyday look: always solid
+            if (staysOn) await api.setDefaultState(device.id, { ...look, pulse: 0 });
+            else if (saved) await api.clearDefaultState(device.id);
+
+            // 2. Events: only update the ones whose link to this light changed
+            const changed = events.filter((event) => linked.includes(event.id) !== initiallyLinked.includes(event.id));
+            for (const event of changed) {
+                const deviceIds = linked.includes(event.id)
+                    ? [...event.deviceIds, device.id]
+                    : event.deviceIds.filter((id) => id !== device.id);
+                await api.updateEvent(event.id, {
+                    name: event.name ?? '',
+                    trigger: event.trigger,
+                    eventLength: event.eventLength,
+                    colorHex: event.colorHex,
+                    brightness: event.brightness,
+                    pulse: event.pulse,
+                    deviceIds,
+                });
+            }
+
+            await onSaved();
+        } catch (caught) {
+            setError(caught instanceof Error ? caught.message : 'Could not save the light.');
+            setBusy(false);
+        }
+    };
+
+    const remove = async () => {
+        setBusy(true);
+        setError('');
+        try {
+            await api.deleteDevice(device.id);
+            await onSaved();
+        } catch (caught) {
+            setError(caught instanceof Error ? caught.message : 'Could not remove the device.');
+            setBusy(false);
+        }
+    };
+
+    return (
+        <Dialog title={isNew ? `Set up ${device.name}` : device.name} onClose={onClose} wide>
+            <form onSubmit={save}>
+                <p className="dialog-intro">
+                    {isNew ? `${device.name} was added to ${device.room.name}. ` : `Light in ${device.room.name}. `}
+                    Choose how it looks day to day, and which sounds make it flash.
+                </p>
+                <p className="field-hint">
+                    Hardware ID: <span>{device.hardwareId ?? 'Not set'}</span>
+                </p>
+
+                {/* ---- 1. Everyday look ---- */}
+                <section className="settings-step" aria-labelledby="step-look">
+                    <div className="settings-step-head">
+                        <span className="step-number">1</span>
+                        <div>
+                            <h3 id="step-look" className="dialog-section-title">
+                                When it's quiet
+                            </h3>
+                            <p className="field-hint">
+                                A solid colour the light shows normally, and goes back to after an alert.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="choice-row" role="radiogroup" aria-labelledby="step-look">
+                        <label className={`choice${staysOn ? ' is-selected' : ''}`}>
+                            <input type="radio" checked={staysOn} onChange={() => setStaysOn(true)} />
+                            <span>
+                                <strong>Stay on</strong>
+                                <small>Glow in a colour you pick</small>
+                            </span>
+                        </label>
+                        <label className={`choice${!staysOn ? ' is-selected' : ''}`}>
+                            <input type="radio" checked={!staysOn} onChange={() => setStaysOn(false)} />
+                            <span>
+                                <strong>Stay off</strong>
+                                <small>Only light up for alerts</small>
+                            </span>
+                        </label>
+                    </div>
+
+                    {staysOn && (
+                        <div className="settings-step-body">
+                            <LightStateFields
+                                value={look}
+                                onChange={setLook}
+                                limits={meta.limits}
+                                idPrefix="everyday"
+                                showPulse={false}
+                            />
+                            <p className="field-hint">
+                                {look.colorHex.toUpperCase()}, {look.brightness}%,{' '}
+                                {describePulse(look.pulse).toLowerCase()}
+                            </p>
+                        </div>
+                    )}
+                </section>
+
+                {/* ---- 2. Events ---- */}
+                <section className="settings-step" aria-labelledby="step-events">
+                    <div className="settings-step-head">
+                        <span className="step-number">2</span>
+                        <div>
+                            <h3 id="step-events" className="dialog-section-title">
+                                When a sound is heard
+                            </h3>
+                            <p className="field-hint">Tick the events this light should react to.</p>
+                        </div>
+                    </div>
+
+                    {events.length === 0 ? (
+                        <p className="field-hint">
+                            You don't have any events yet.{' '}
+                            <button className="text-button" type="button" onClick={onGoToEvents}>
+                                Create one on the Events tab
+                            </button>
+                        </p>
+                    ) : (
+                        <ul className="event-pick-list">
+                            {events.map((event) => {
+                                const isOn = linked.includes(event.id);
+                                return (
+                                    <li key={event.id} className={`event-pick${isOn ? ' is-selected' : ''}`}>
+                                        <label className="event-pick-main">
+                                            <input
+                                                type="checkbox"
+                                                checked={isOn}
+                                                onChange={() => toggleEvent(event.id)}
+                                            />
+                                            <LightOrb state={event} size="small" />
+                                            <span className="event-pick-text">
+                                                <strong>{event.name || event.triggerLabel}</strong>
+                                                <small>
+                                                    {event.name ? `${event.triggerLabel} · ` : ''}
+                                                    {event.colorHex.toUpperCase()}, {event.brightness}%,{' '}
+                                                    {describePulse(event.pulse).toLowerCase()}, for{' '}
+                                                    {describeLength(event.eventLength)}
+                                                </small>
+                                            </span>
+                                        </label>
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    )}
+                </section>
+
+                {error && !confirmingRemove && (
+                    <p className="form-error" role="alert">
+                        {error}
+                    </p>
+                )}
+                <div className="dialog-actions">
+                    <button
+                        className="btn btn-danger"
+                        type="button"
+                        onClick={() => setConfirmingRemove(true)}
+                        disabled={busy}
+                    >
+                        Remove device
+                    </button>
+                    <span className="spacer" />
+                    <button className="btn btn-secondary" type="button" onClick={onClose}>
+                        {isNew ? 'Skip for now' : 'Cancel'}
+                    </button>
+                    <button className="btn btn-primary" type="submit" disabled={busy}>
+                        {busy ? 'Saving…' : 'Save'}
+                    </button>
+                </div>
+            </form>
+
+            {confirmingRemove && (
+                <ConfirmDialog
+                    title="Remove device?"
+                    message={
+                        <>
+                            Are you sure you want to remove <strong>{device.name}</strong>? Its settings and event links
+                            are removed too.
+                        </>
+                    }
+                    confirmLabel="Remove"
+                    busyLabel="Removing…"
+                    busy={busy}
+                    error={error}
+                    onConfirm={remove}
+                    onCancel={() => {
+                        setConfirmingRemove(false);
+                        setError('');
+                    }}
+                />
+            )}
+        </Dialog>
+    );
+}
+
+/* ---------- Microphones, speakers, cameras: nothing to set, just details ---------- */
+
+function OtherDeviceDialog({
+    device,
     onClose,
     onRemoved,
 }: {
     device: Device;
-    preview?: Preview;
-    onPreview: (event: DeviceEvent) => void;
-    onEditDefault: () => void;
-    onGoToEvents: () => void;
     onClose: () => void;
     onRemoved: () => Promise<void>;
 }) {
+    const [confirmingRemove, setConfirmingRemove] = useState(false);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
-    const isLight = device.type === 'light';
 
     const remove = async () => {
-        if (!window.confirm(`Remove ${device.name}? Its default state and event links are removed too.`)) return;
         setBusy(true);
         setError('');
         try {
@@ -321,19 +546,11 @@ function DeviceDialog({
     };
 
     return (
-        <Dialog title={device.name} onClose={onClose} wide={isLight}>
+        <Dialog title={device.name} onClose={onClose}>
             <div className="device-summary">
-                {isLight ? (
-                    <LightOrb
-                        state={preview?.state ?? device.defaultState}
-                        alerting={Boolean(preview)}
-                        label={preview ? `Showing ${preview.label}` : 'Resting state'}
-                    />
-                ) : (
-                    <span className="type-icon">
-                        <Icon icon={TYPE_ICONS[device.type]} />
-                    </span>
-                )}
+                <span className="type-icon">
+                    <Icon icon={TYPE_ICONS[device.type]} />
+                </span>
                 <dl>
                     <dt>Type</dt>
                     <dd>{TYPE_NAMES[device.type]}</dd>
@@ -341,87 +558,41 @@ function DeviceDialog({
                     <dd>{device.room.name}</dd>
                     <dt>Hardware ID</dt>
                     <dd>{device.hardwareId ?? 'Not set'}</dd>
-                    {preview && (
-                        <>
-                            <dt>Now showing</dt>
-                            <dd aria-live="polite">{preview.label}</dd>
-                        </>
-                    )}
                 </dl>
             </div>
+            <p className="field-hint">
+                {TYPE_NAMES[device.type]}s don't light up. Beacon uses them to hear or capture sounds.
+            </p>
 
-            {isLight ? (
-                <>
-                    <div className="dialog-section">
-                        <h3 className="dialog-section-title">Resting light</h3>
-                        {device.defaultState ? (
-                            <p className="state-line">
-                                <span className="color-dot" style={{ background: device.defaultState.colorHex }} />
-                                {describeState(device.defaultState)}
-                            </p>
-                        ) : (
-                            <p className="field-hint state-line">Not set. The light stays off between alerts.</p>
-                        )}
-                        <button className="btn btn-secondary btn-sm" type="button" onClick={onEditDefault}>
-                            {device.defaultState ? 'Change resting light' : 'Set resting light'}
-                        </button>
-                    </div>
-
-                    <div className="dialog-section">
-                        <h3 className="dialog-section-title">When a sound is detected</h3>
-                        {device.events.length === 0 ? (
-                            <p className="field-hint">
-                                No events linked yet.{' '}
-                                <button className="text-button" type="button" onClick={onGoToEvents}>
-                                    Link one on the Events tab
-                                </button>
-                            </p>
-                        ) : (
-                            <ul className="preview-list">
-                                {device.events.map((event) => (
-                                    <li key={event.id} className="preview-item">
-                                        <span className="color-dot" style={{ background: event.colorHex }} />
-                                        <span className="preview-item-text">
-                                            <strong>{event.name || event.triggerLabel}</strong>
-                                            <small>
-                                                {event.colorHex.toUpperCase()}, {event.brightness}%,{' '}
-                                                {describePulse(event.pulse).toLowerCase()}, for{' '}
-                                                {describeLength(event.eventLength)}
-                                            </small>
-                                        </span>
-                                        <button
-                                            className="btn btn-secondary btn-sm"
-                                            type="button"
-                                            onClick={() => onPreview(event)}
-                                        >
-                                            Preview
-                                        </button>
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                    </div>
-                </>
-            ) : (
-                <p className="field-hint">
-                    {TYPE_NAMES[device.type]}s don't have a light state. Beacon uses them to hear or capture events.
-                </p>
-            )}
-
-            {error && (
-                <p className="form-error" role="alert">
-                    {error}
-                </p>
-            )}
             <div className="dialog-actions">
-                <button className="btn btn-danger" type="button" onClick={remove} disabled={busy}>
-                    {busy ? 'Removing…' : 'Remove device'}
+                <button className="btn btn-danger" type="button" onClick={() => setConfirmingRemove(true)}>
+                    Remove device
                 </button>
                 <span className="spacer" />
                 <button className="btn btn-primary" type="button" onClick={onClose}>
                     Done
                 </button>
             </div>
+
+            {confirmingRemove && (
+                <ConfirmDialog
+                    title="Remove device?"
+                    message={
+                        <>
+                            Are you sure you want to remove <strong>{device.name}</strong>?
+                        </>
+                    }
+                    confirmLabel="Remove"
+                    busyLabel="Removing…"
+                    busy={busy}
+                    error={error}
+                    onConfirm={remove}
+                    onCancel={() => {
+                        setConfirmingRemove(false);
+                        setError('');
+                    }}
+                />
+            )}
         </Dialog>
     );
 }
@@ -555,85 +726,7 @@ function AddDeviceDialog({
                         Cancel
                     </button>
                     <button className="btn btn-primary" type="submit" disabled={busy}>
-                        {busy ? 'Adding…' : type === 'light' ? 'Next: choose its color' : 'Add device'}
-                    </button>
-                </div>
-            </form>
-        </Dialog>
-    );
-}
-
-/* ---------- Resting (default) light state ---------- */
-
-function DefaultStateDialog({
-    meta,
-    device,
-    onClose,
-    onSaved,
-}: {
-    meta: Meta;
-    device: Device;
-    onClose: () => void;
-    onSaved: () => Promise<void>;
-}) {
-    const [draft, setDraft] = useState<LightDraft>(
-        device.defaultState
-            ? {
-                  colorHex: device.defaultState.colorHex,
-                  brightness: device.defaultState.brightness,
-                  pulse: device.defaultState.pulse,
-              }
-            : FALLBACK_DEFAULT,
-    );
-    const [busy, setBusy] = useState(false);
-    const [error, setError] = useState('');
-
-    const run = async (action: () => Promise<unknown>) => {
-        setBusy(true);
-        setError('');
-        try {
-            await action();
-            await onSaved();
-        } catch (caught) {
-            setError(caught instanceof Error ? caught.message : 'Could not save the resting light.');
-            setBusy(false);
-        }
-    };
-
-    return (
-        <Dialog title={`Resting light for ${device.name}`} onClose={onClose} wide>
-            <form
-                onSubmit={(event) => {
-                    event.preventDefault();
-                    run(() => api.setDefaultState(device.id, draft));
-                }}
-            >
-                <p className="dialog-intro">
-                    This is how the light looks when nothing is happening, and what it returns to after an alert ends.
-                </p>
-                <LightStateFields value={draft} onChange={setDraft} limits={meta.limits} idPrefix="default" />
-                {error && (
-                    <p className="form-error" role="alert">
-                        {error}
-                    </p>
-                )}
-                <div className="dialog-actions">
-                    {device.defaultState && (
-                        <button
-                            className="btn btn-danger"
-                            type="button"
-                            disabled={busy}
-                            onClick={() => run(() => api.clearDefaultState(device.id))}
-                        >
-                            Turn off resting light
-                        </button>
-                    )}
-                    <span className="spacer" />
-                    <button className="btn btn-secondary" type="button" onClick={onClose}>
-                        Cancel
-                    </button>
-                    <button className="btn btn-primary" type="submit" disabled={busy}>
-                        {busy ? 'Saving…' : 'Save'}
+                        {busy ? 'Adding…' : type === 'light' ? 'Next: set up the light' : 'Add device'}
                     </button>
                 </div>
             </form>
