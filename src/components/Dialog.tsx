@@ -1,6 +1,7 @@
-import React, { ReactNode, useEffect, useRef } from 'react';
+import { ReactNode, useEffect, useRef } from 'react';
 import { FiX } from 'react-icons/fi';
 import Icon from './Icon';
+import './Dialog.css';
 
 type Props = { title: string; onClose: () => void; children: ReactNode; wide?: boolean };
 
@@ -23,7 +24,7 @@ export default function Dialog({ title, onClose, children, wide = false }: Props
     return (
         <div className="dialog-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
             <div
-                className={`dialog-panel${wide ? ' dialog-wide' : ''}`}
+                className={`dialog${wide ? ' dialog-wide' : ''}`}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="dialog-title"

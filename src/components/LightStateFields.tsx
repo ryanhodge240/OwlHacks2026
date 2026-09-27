@@ -1,7 +1,7 @@
-import React from 'react';
 import { LightDraft, Meta } from '../types';
 import { describePulse } from '../lightFormat';
 import LightOrb from './LightOrb';
+import './LightStateFields.css';
 
 const SWATCHES = [
     { hex: '#ffd9a0', name: 'Warm white' },
@@ -36,9 +36,10 @@ export default function LightStateFields({ value, onChange, limits, idPrefix }: 
                     {describePulse(value.pulse)}
                 </p>
             </div>
+
             <div className="state-controls">
-                <fieldset>
-                    <legend>Color</legend>
+                <fieldset className="state-group">
+                    <legend className="field-label">Color</legend>
                     <div className="swatch-row">
                         {SWATCHES.map((swatch) => (
                             <button
@@ -62,21 +63,25 @@ export default function LightStateFields({ value, onChange, limits, idPrefix }: 
                     </div>
                 </fieldset>
 
-                <label htmlFor={`${idPrefix}-brightness`}>Brightness</label>
-                <div className="range-row">
-                    <input
-                        id={`${idPrefix}-brightness`}
-                        type="range"
-                        min={limits.brightness.min}
-                        max={limits.brightness.max}
-                        value={value.brightness}
-                        onChange={(event) => set({ brightness: Number(event.target.value) })}
-                    />
-                    <output htmlFor={`${idPrefix}-brightness`}>{value.brightness}%</output>
+                <div className="state-group">
+                    <label className="field-label" htmlFor={`${idPrefix}-brightness`}>
+                        Brightness
+                    </label>
+                    <div className="range-row">
+                        <input
+                            id={`${idPrefix}-brightness`}
+                            type="range"
+                            min={limits.brightness.min}
+                            max={limits.brightness.max}
+                            value={value.brightness}
+                            onChange={(event) => set({ brightness: Number(event.target.value) })}
+                        />
+                        <output htmlFor={`${idPrefix}-brightness`}>{value.brightness}%</output>
+                    </div>
                 </div>
 
-                <fieldset>
-                    <legend>Pulse</legend>
+                <fieldset className="state-group">
+                    <legend className="field-label">Pulse</legend>
                     <div className="segmented">
                         {PULSES.map((pulse) => (
                             <button
@@ -93,6 +98,7 @@ export default function LightStateFields({ value, onChange, limits, idPrefix }: 
                         Cycle length
                         <input
                             id={`${idPrefix}-pulse`}
+                            className="input"
                             type="number"
                             min={limits.pulse.min}
                             max={limits.pulse.max}

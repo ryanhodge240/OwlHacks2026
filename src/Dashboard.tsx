@@ -1,18 +1,20 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { FiLogOut, FiPlay } from 'react-icons/fi';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { FiPlay } from 'react-icons/fi';
 import { api } from './api';
 import DevicesView, { Preview } from './components/DevicesView';
 import EventsView from './components/EventsView';
 import Icon from './components/Icon';
 import RoomsView from './components/RoomsView';
-import BeaconLogo from './img/beacon-logo.png';
+import ThemeToggle from './components/ThemeToggle';
+import BeaconLogo from './img/beacon-logo-clear.png';
 import { BeaconEvent, Device, DeviceEvent, LightState, Meta, Room, TriggerResult, User } from './types';
+import './Dashboard.css';
 
 type Tab = 'devices' | 'events' | 'rooms';
-const TABS: { id: Tab; name: string }[] = [
-    { id: 'devices', name: 'Devices' },
-    { id: 'events', name: 'Events' },
-    { id: 'rooms', name: 'Rooms' },
+const TABS: { id: Tab; name: string; title: string }[] = [
+    { id: 'devices', name: 'Devices', title: 'Connected Devices' },
+    { id: 'events', name: 'Events', title: 'Sound Events' },
+    { id: 'rooms', name: 'Rooms', title: 'Rooms' },
 ];
 /** Previews run for the event's length, capped so a 10-minute alert doesn't take over the dashboard. */
 const MAX_PREVIEW_MS = 8000;
@@ -94,21 +96,31 @@ export default function Dashboard({ user, onLogout }: Props) {
         }
     };
 
+    const testMessage =
+        testError ||
+        (testResult &&
+            (testResult.commands.length === 0
+                ? `No lights respond to ${testResult.triggerLabel.toLowerCase()} yet.`
+                : `${testResult.triggerLabel}: ${testResult.commands.length} ${
+                      testResult.commands.length === 1 ? 'light' : 'lights'
+                  } changed.`));
+
+    const current = TABS.find((item) => item.id === tab) ?? TABS[0];
+
     return (
-        <main className="dashboard-page">
-            <header className="dashboard-header">
-                <a className="brand-lockup" href="/" aria-label="Beacon home">
-                    <span className="brand-mark">
-                        <img src={BeaconLogo} alt="" />
-                    </span>
+        <div className="dashboard">
+            <header className="dash-header">
+                <a className="brand" href="/" aria-label="Beacon home">
+                    <img src={BeaconLogo} alt="" />
                     <span>Beacon</span>
                 </a>
-                <nav className="tabs" aria-label="Sections">
+
+                <nav className="dash-tabs" aria-label="Sections">
                     {TABS.map((item) => (
                         <button
                             key={item.id}
                             type="button"
-                            className="tab"
+                            className="dash-tab"
                             aria-current={tab === item.id ? 'page' : undefined}
                             onClick={() => setTab(item.id)}
                         >
@@ -116,54 +128,58 @@ export default function Dashboard({ user, onLogout }: Props) {
                         </button>
                     ))}
                 </nav>
-                <div className="account-area">
-                    <span className="account-greeting">
+
+                <div className="dash-header-actions">
+                    <span className="dash-user">
                         Hi, <strong>{user.username}</strong>
                     </span>
-                    <button className="logout-button" type="button" onClick={onLogout}>
-                        <Icon icon={FiLogOut} /> Log out
+                    <ThemeToggle />
+                    <button className="btn btn-primary" type="button" onClick={onLogout}>
+                        Logout
                     </button>
                 </div>
             </header>
 
-            <div className="dashboard-content">
-                {meta && (
-                    <div className="test-bar">
-                        <label htmlFor="test-trigger">Test a sound</label>
-                        <select
-                            id="test-trigger"
-                            value={testTrigger}
-                            onChange={(event) => setTestTrigger(event.target.value)}
-                        >
-                            {meta.triggerTypes.map((type) => (
-                                <option key={type.value} value={type.value}>
-                                    {type.label}
-                                </option>
-                            ))}
-                        </select>
-                        <button className="primary-button compact" type="button" onClick={runTest}>
-                            <Icon icon={FiPlay} /> Play on my lights
-                        </button>
-                        <p className="test-result" aria-live="polite">
-                            {testError ||
-                                (testResult &&
-                                    (testResult.commands.length === 0
-                                        ? `No lights respond to ${testResult.triggerLabel.toLowerCase()} yet.`
-                                        : `${testResult.triggerLabel}: ${testResult.commands.length} ${
-                                              testResult.commands.length === 1 ? 'light' : 'lights'
-                                          } changed.`))}
-                        </p>
-                    </div>
-                )}
+            <main className="dash-main">
+                <div className="page-head">
+                    <h1 className="page-title">{current.title}</h1>
+
+                    {meta && (
+                        <div className="test-sound">
+                            <label className="field-label" htmlFor="test-trigger">
+                                Test a sound
+                            </label>
+                            <select
+                                id="test-trigger"
+                                className="input"
+                                value={testTrigger}
+                                onChange={(event) => setTestTrigger(event.target.value)}
+                            >
+                                {meta.triggerTypes.map((type) => (
+                                    <option key={type.value} value={type.value}>
+                                        {type.label}
+                                    </option>
+                                ))}
+                            </select>
+                            <button className="btn btn-secondary" type="button" onClick={runTest}>
+                                <Icon icon={FiPlay} /> Play
+                            </button>
+                        </div>
+                    )}
+                </div>
+
+                <p className={`test-result${testError ? ' form-error' : ''}`} aria-live="polite">
+                    {testMessage}
+                </p>
 
                 {loadError && (
-                    <p className="form-error" role="alert">
+                    <p className="form-error page-error" role="alert">
                         {loadError}
                     </p>
                 )}
 
                 {!meta ? (
-                    <div className="empty-state">Loading your home…</div>
+                    <p className="page-loading">Loading your home…</p>
                 ) : tab === 'devices' ? (
                     <DevicesView
                         meta={meta}
@@ -179,7 +195,7 @@ export default function Dashboard({ user, onLogout }: Props) {
                 ) : (
                     <RoomsView rooms={rooms} onChanged={refresh} />
                 )}
-            </div>
-        </main>
+            </main>
+        </div>
     );
 }

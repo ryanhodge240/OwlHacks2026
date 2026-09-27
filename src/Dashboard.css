@@ -1,0 +1,403 @@
+/*
+ * Dashboard: header, page title, and the layout every tab shares:
+ *   grey filter bar (fields on the left, add button on the right)
+ *   → table with a red header row.
+ * Colours, buttons and inputs come from index.css.
+ */
+
+ .dashboard {
+    min-height: 100vh;
+    min-height: 100dvh;
+    background: var(--bg);
+}
+
+/* ---------- Header: logo, tabs, account ---------- */
+
+.dash-header {
+    display: flex;
+    align-items: center;
+    gap: clamp(1.5rem, 6vw, 5rem);
+    padding: 1.25rem var(--gutter);
+}
+
+.dash-tabs {
+    display: flex;
+    gap: clamp(1rem, 2.5vw, 2rem);
+}
+
+.dash-tab {
+    padding: 0.25rem 0;
+    border: 0;
+    background: none;
+    font-size: 1.1rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+}
+
+.dash-tab:hover,
+.dash-tab[aria-current='page'] {
+    color: var(--accent-text);
+}
+
+.dash-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-left: auto;
+}
+
+.dash-user {
+    margin-right: 0.25rem;
+    font-size: 0.9rem;
+}
+
+.dash-user strong {
+    font-weight: 600;
+}
+
+/* ---------- Page body ---------- */
+
+.dash-main {
+    padding: 0.75rem var(--gutter) 3rem;
+}
+
+.page-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem 2rem;
+}
+
+.page-title {
+    font-size: clamp(1.6rem, 1.3rem + 1vw, 2rem);
+    font-weight: 700;
+    letter-spacing: -0.035em;
+    line-height: 1.1;
+}
+
+/* Test a sound: small control on the right of the title */
+.test-sound {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.test-sound .input {
+    width: auto;
+    min-width: 11rem;
+    height: 2.4rem;
+}
+
+.test-sound .btn {
+    padding-block: 0.45rem;
+}
+
+.test-result {
+    min-height: 1.4rem;
+    margin: 0.35rem 0 0.4rem;
+    color: var(--muted);
+    font-size: 0.9rem;
+    text-align: right;
+}
+
+.page-error {
+    margin-bottom: 1rem;
+}
+
+.page-loading {
+    padding: 3rem 0;
+    font-weight: 600;
+    text-align: center;
+}
+
+/* ---------- Filter bar ---------- */
+
+.toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 1rem clamp(1rem, 2vw, 1.75rem);
+    margin-bottom: 1rem;
+    padding: 1rem 1.25rem 1.15rem;
+    border-radius: 0.5rem;
+    background: var(--panel);
+}
+
+.toolbar .field {
+    flex: 0 1 16rem;
+    min-width: 11rem;
+}
+
+/* The add button is pushed to the far right, centred against the fields */
+.toolbar-add {
+    align-self: center;
+    margin-left: auto;
+}
+
+.view-error {
+    margin: -0.25rem 0 1rem;
+}
+
+/* ---------- Table ---------- */
+
+.table-frame {
+    min-height: clamp(16rem, 55vh, 36rem);
+    overflow-x: auto;
+    border: var(--border);
+    border-radius: 0.5rem;
+    background: var(--panel);
+}
+
+.data-table {
+    width: 100%;
+    /* below this the table scrolls sideways instead of squashing */
+    min-width: 40rem;
+    border-collapse: collapse;
+    font-size: 0.95rem;
+}
+
+.data-table th,
+.data-table td {
+    padding: 0.75rem clamp(1rem, 2.5vw, 2.5rem);
+    text-align: left;
+    vertical-align: middle;
+}
+
+.data-table thead th {
+    background: var(--red);
+    color: var(--on-red);
+    font-size: 1rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.data-table tbody tr {
+    border-bottom: var(--border);
+    background: var(--surface);
+    transition: background-color 0.3s ease;
+}
+
+.data-table tbody td {
+    font-weight: 500;
+}
+
+/* A light that is showing an alert preview */
+.data-table tbody tr.is-previewing {
+    background: var(--highlight);
+}
+
+/* Last column: buttons, shrunk to fit and aligned right */
+.data-table .col-actions {
+    width: 1%;
+    text-align: right;
+    white-space: nowrap;
+}
+
+/* Icon or orb beside the main text of a cell */
+.cell-main {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.cell-main strong {
+    font-weight: 600;
+}
+
+.cell-sub {
+    display: block;
+    color: var(--muted);
+    font-size: 0.82rem;
+}
+
+.cell-muted {
+    color: var(--muted);
+}
+
+.type-icon {
+    display: inline-grid;
+    width: 1.75rem;
+    height: 1.75rem;
+    flex: 0 0 auto;
+    place-items: center;
+    border: 2px solid var(--line);
+    border-radius: 50%;
+    font-size: 0.85rem;
+}
+
+.color-dot {
+    display: inline-block;
+    width: 0.8rem;
+    height: 0.8rem;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+
+/* Event names in the Devices table: click one to preview it on the light */
+.event-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.9rem;
+}
+
+.event-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0;
+    border: 0;
+    background: none;
+    font-weight: 500;
+}
+
+.event-link:hover {
+    color: var(--accent-text);
+    text-decoration: underline;
+}
+
+/* Empty table / no matches: sits in the grey area under the header */
+.table-empty {
+    display: grid;
+    justify-items: center;
+    gap: 0.5rem;
+    padding: 3rem 1.5rem;
+    text-align: center;
+}
+
+.table-empty h3 {
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+
+.table-empty p {
+    max-width: 26rem;
+    color: var(--muted);
+    line-height: 1.5;
+}
+
+.table-empty .btn {
+    margin-top: 0.5rem;
+}
+
+/* ---------- Device details dialog ---------- */
+
+.device-summary {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    margin-bottom: 1.5rem;
+    padding: 1.1rem 1.25rem;
+    border-radius: 0.5rem;
+    background: var(--panel);
+}
+
+.device-summary .type-icon {
+    width: 3.5rem;
+    height: 3.5rem;
+    font-size: 1.4rem;
+}
+
+.device-summary dl {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.25rem 1rem;
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+.device-summary dt {
+    color: var(--muted);
+}
+
+.device-summary dd {
+    margin: 0;
+    font-weight: 600;
+}
+
+.state-line {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    margin-bottom: 0.6rem;
+}
+
+.preview-list {
+    display: grid;
+    gap: 0.4rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.preview-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 0.75rem;
+    border-radius: var(--radius);
+    background: var(--panel);
+}
+
+.preview-item-text {
+    display: grid;
+    min-width: 0;
+    flex: 1;
+}
+
+.preview-item-text strong {
+    font-weight: 600;
+}
+
+.preview-item-text small {
+    color: var(--muted);
+}
+
+/* ---------- Tablets and phones ---------- */
+
+@media (max-width: 860px) {
+    .dash-header {
+        flex-wrap: wrap;
+        gap: 0.75rem 1rem;
+    }
+
+    /* Tabs drop to their own row under the logo */
+    .dash-tabs {
+        order: 3;
+        width: 100%;
+    }
+
+    .dash-user {
+        display: none;
+    }
+
+    .test-result {
+        text-align: left;
+    }
+
+    .toolbar .field {
+        flex: 1 1 100%;
+    }
+
+    .toolbar-add {
+        width: 100%;
+        margin-left: 0;
+    }
+}
+
+@media (max-width: 480px) {
+    /* Icon-only theme switch to save room */
+    .dash-header .theme-toggle span {
+        display: none;
+    }
+
+    .test-sound {
+        width: 100%;
+        flex-wrap: wrap;
+    }
+
+    .test-sound .input {
+        flex: 1;
+    }
+}
