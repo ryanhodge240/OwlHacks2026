@@ -1,5 +1,5 @@
-import React, { FormEvent, useState } from 'react';
-import { FiBell, FiEdit2, FiPlus, FiTrash2 } from 'react-icons/fi';
+import { FormEvent, useMemo, useState } from 'react';
+import { FiPlus } from 'react-icons/fi';
 import { api } from '../api';
 import { describeLength, describePulse } from '../lightFormat';
 import { BeaconEvent, Device, LightDraft, Meta } from '../types';
@@ -11,92 +11,155 @@ import LightStateFields from './LightStateFields';
 type Props = { meta: Meta; events: BeaconEvent[]; devices: Device[]; onChanged: () => Promise<void> };
 
 export default function EventsView({ meta, events, devices, onChanged }: Props) {
+    const [query, setQuery] = useState('');
+    const [trigger, setTrigger] = useState('');
+    const [lightId, setLightId] = useState('');
     const [editing, setEditing] = useState<BeaconEvent | 'new' | null>(null);
-    const [error, setError] = useState('');
+
     const lights = devices.filter((device) => device.type === 'light');
     const lightName = (id: number) => lights.find((light) => light.id === id)?.name ?? 'Removed light';
+    const titleOf = (event: BeaconEvent) => event.name || event.triggerLabel;
 
-    const remove = async (event: BeaconEvent) => {
-        if (!window.confirm(`Delete ${event.name || event.triggerLabel}?`)) return;
-        try {
-            await api.deleteEvent(event.id);
-            await onChanged();
-        } catch (caught) {
-            setError(caught instanceof Error ? caught.message : 'Could not delete the event.');
-        }
+    const shown = useMemo(() => {
+        const text = query.trim().toLowerCase();
+        return events
+            .filter((event) => !text || (event.name || event.triggerLabel).toLowerCase().includes(text))
+            .filter((event) => !trigger || event.trigger === trigger)
+            .filter((event) => !lightId || event.deviceIds.includes(Number(lightId)));
+    }, [events, query, trigger, lightId]);
+
+    const filtering = Boolean(query || trigger || lightId);
+    const clearFilters = () => {
+        setQuery('');
+        setTrigger('');
+        setLightId('');
     };
 
     return (
-        <section aria-labelledby="events-heading">
-            <div className="view-head">
-                <div>
-                    <h1 id="events-heading">Events</h1>
-                    <p>Choose a sound, how the light should look when it's heard, and which lights respond.</p>
+        <section aria-label="Events">
+            <div className="toolbar">
+                <div className="field">
+                    <label className="field-label" htmlFor="event-filter-name">
+                        Event Name
+                    </label>
+                    <input
+                        id="event-filter-name"
+                        className="input"
+                        type="search"
+                        value={query}
+                        onChange={(event) => setQuery(event.target.value)}
+                    />
                 </div>
-                <button className="primary-button compact" type="button" onClick={() => setEditing('new')}>
-                    <Icon icon={FiPlus} /> New event
+                <div className="field">
+                    <label className="field-label" htmlFor="event-filter-sound">
+                        Sound
+                    </label>
+                    <select
+                        id="event-filter-sound"
+                        className="input"
+                        value={trigger}
+                        onChange={(event) => setTrigger(event.target.value)}
+                    >
+                        <option value="">All Sounds</option>
+                        {meta.triggerTypes.map((type) => (
+                            <option key={type.value} value={type.value}>
+                                {type.label}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+                <div className="field">
+                    <label className="field-label" htmlFor="event-filter-light">
+                        Light
+                    </label>
+                    <select
+                        id="event-filter-light"
+                        className="input"
+                        value={lightId}
+                        onChange={(event) => setLightId(event.target.value)}
+                    >
+                        <option value="">All Lights</option>
+                        {lights.map((light) => (
+                            <option key={light.id} value={light.id}>
+                                {light.name}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+                <button className="btn btn-primary toolbar-add" type="button" onClick={() => setEditing('new')}>
+                    New Event <Icon icon={FiPlus} />
                 </button>
             </div>
 
-            {error && (
-                <p className="form-error" role="alert">
-                    {error}
-                </p>
-            )}
+            <div className="table-frame">
+                <table className="data-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Name</th>
+                            <th scope="col">Sound</th>
+                            <th scope="col">Light</th>
+                            <th scope="col">Lights</th>
+                            <th scope="col" className="col-actions">
+                                <span className="visually-hidden">Actions</span>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {shown.map((event) => (
+                            <tr key={event.id}>
+                                <td>
+                                    <div className="cell-main">
+                                        <LightOrb state={event} size="small" />
+                                        <strong>{titleOf(event)}</strong>
+                                    </div>
+                                </td>
+                                <td>{event.triggerLabel}</td>
+                                <td>
+                                    {event.colorHex.toUpperCase()}, {event.brightness}%
+                                    <span className="cell-sub">
+                                        {describePulse(event.pulse)}, for {describeLength(event.eventLength)}
+                                    </span>
+                                </td>
+                                <td>
+                                    {event.deviceIds.length === 0 ? (
+                                        <span className="cell-muted">No lights</span>
+                                    ) : (
+                                        event.deviceIds.map(lightName).join(', ')
+                                    )}
+                                </td>
+                                <td className="col-actions">
+                                    <button
+                                        className="btn btn-primary btn-sm"
+                                        type="button"
+                                        onClick={() => setEditing(event)}
+                                    >
+                                        Edit
+                                    </button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
 
-            {events.length === 0 ? (
-                <div className="empty-state">
-                    <span className="empty-icon">
-                        <Icon icon={FiBell} />
-                    </span>
-                    <h3>No events yet</h3>
-                    <p>Create one, for example a red fast pulse on every light when the fire alarm sounds.</p>
-                    <button className="primary-button compact" type="button" onClick={() => setEditing('new')}>
-                        Create an event
-                    </button>
-                </div>
-            ) : (
-                <div className="event-list">
-                    {events.map((event) => (
-                        <article className="event-row" key={event.id}>
-                            <LightOrb state={event} size="small" />
-                            <div className="event-main">
-                                <h3>{event.name || event.triggerLabel}</h3>
-                                <p>
-                                    Heard: <strong>{event.triggerLabel}</strong>
-                                </p>
-                                <p>
-                                    {event.colorHex.toUpperCase()}, {event.brightness}%,{' '}
-                                    {describePulse(event.pulse).toLowerCase()}, for {describeLength(event.eventLength)}
-                                </p>
-                                <p className="event-lights">
-                                    {event.deviceIds.length === 0
-                                        ? 'Not linked to any lights'
-                                        : event.deviceIds.map(lightName).join(', ')}
-                                </p>
-                            </div>
-                            <div className="row-actions">
-                                <button
-                                    className="icon-button"
-                                    type="button"
-                                    aria-label={`Edit ${event.name || event.triggerLabel}`}
-                                    onClick={() => setEditing(event)}
-                                >
-                                    <Icon icon={FiEdit2} />
-                                </button>
-                                <button
-                                    className="icon-button"
-                                    type="button"
-                                    aria-label={`Delete ${event.name || event.triggerLabel}`}
-                                    onClick={() => remove(event)}
-                                >
-                                    <Icon icon={FiTrash2} />
-                                </button>
-                            </div>
-                        </article>
+                {shown.length === 0 &&
+                    (filtering ? (
+                        <div className="table-empty">
+                            <h3>No events match</h3>
+                            <p>Try a different name, sound or light.</p>
+                            <button className="btn btn-secondary btn-sm" type="button" onClick={clearFilters}>
+                                Clear filters
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="table-empty">
+                            <h3>No events yet</h3>
+                            <p>Create one, for example a fast red pulse on every light when the fire alarm sounds.</p>
+                            <button className="btn btn-primary" type="button" onClick={() => setEditing('new')}>
+                                Create an event
+                            </button>
+                        </div>
                     ))}
-                </div>
-            )}
+            </div>
 
             {editing && (
                 <EventDialog
@@ -157,51 +220,77 @@ function EventDialog({
         }
     };
 
+    const remove = async () => {
+        if (!event || !window.confirm(`Delete ${event.name || event.triggerLabel}?`)) return;
+        setBusy(true);
+        setError('');
+        try {
+            await api.deleteEvent(event.id);
+            await onSaved();
+        } catch (caught) {
+            setError(caught instanceof Error ? caught.message : 'Could not delete the event.');
+            setBusy(false);
+        }
+    };
+
     return (
         <Dialog title={event ? 'Edit event' : 'New event'} onClose={onClose} wide>
-            <form className="event-form" onSubmit={submit}>
-                <div className="event-form-grid">
-                    <div className="stack-form">
-                        <label htmlFor="event-trigger">Sound</label>
-                        <select
-                            id="event-trigger"
-                            value={trigger}
-                            onChange={(change) => setTrigger(change.target.value)}
-                        >
-                            {meta.triggerTypes.map((type) => (
-                                <option key={type.value} value={type.value}>
-                                    {type.label}
-                                </option>
-                            ))}
-                        </select>
-
-                        <label htmlFor="event-name">
-                            Name <span className="optional">optional</span>
-                        </label>
-                        <input
-                            id="event-name"
-                            value={name}
-                            onChange={(change) => setName(change.target.value)}
-                            maxLength={150}
-                            placeholder={meta.triggerTypes.find((type) => type.value === trigger)?.label}
-                        />
-
-                        <label htmlFor="event-length">How long the alert lasts</label>
-                        <div className="inline-number">
-                            <input
-                                id="event-length"
-                                type="number"
-                                min={meta.limits.eventLength.min}
-                                max={meta.limits.eventLength.max}
-                                value={eventLength}
-                                onChange={(change) => setEventLength(Number(change.target.value))}
-                                required
-                            />
-                            seconds
+            <form onSubmit={submit}>
+                <div className="dialog-columns">
+                    <div className="dialog-form">
+                        <div className="field">
+                            <label className="field-label" htmlFor="event-trigger">
+                                Sound
+                            </label>
+                            <select
+                                id="event-trigger"
+                                className="input"
+                                value={trigger}
+                                onChange={(change) => setTrigger(change.target.value)}
+                            >
+                                {meta.triggerTypes.map((type) => (
+                                    <option key={type.value} value={type.value}>
+                                        {type.label}
+                                    </option>
+                                ))}
+                            </select>
                         </div>
 
-                        <fieldset>
-                            <legend>Lights that respond</legend>
+                        <div className="field">
+                            <label className="field-label" htmlFor="event-name">
+                                Name <span className="optional">optional</span>
+                            </label>
+                            <input
+                                id="event-name"
+                                className="input"
+                                value={name}
+                                onChange={(change) => setName(change.target.value)}
+                                maxLength={150}
+                                placeholder={meta.triggerTypes.find((type) => type.value === trigger)?.label}
+                            />
+                        </div>
+
+                        <div className="field">
+                            <label className="field-label" htmlFor="event-length">
+                                How long the alert lasts
+                            </label>
+                            <div className="inline-number">
+                                <input
+                                    id="event-length"
+                                    className="input"
+                                    type="number"
+                                    min={meta.limits.eventLength.min}
+                                    max={meta.limits.eventLength.max}
+                                    value={eventLength}
+                                    onChange={(change) => setEventLength(Number(change.target.value))}
+                                    required
+                                />
+                                seconds
+                            </div>
+                        </div>
+
+                        <fieldset className="field-group">
+                            <legend className="field-label">Lights that respond</legend>
                             {lights.length === 0 ? (
                                 <p className="field-hint">Add a light on the Devices tab to link it here.</p>
                             ) : (
@@ -225,7 +314,7 @@ function EventDialog({
                     </div>
 
                     <div>
-                        <h3 className="subhead">How the light looks</h3>
+                        <h3 className="dialog-section-title">How the light looks</h3>
                         <LightStateFields value={look} onChange={setLook} limits={meta.limits} idPrefix="event" />
                     </div>
                 </div>
@@ -236,11 +325,16 @@ function EventDialog({
                     </p>
                 )}
                 <div className="dialog-actions">
+                    {event && (
+                        <button className="btn btn-danger" type="button" onClick={remove} disabled={busy}>
+                            Delete event
+                        </button>
+                    )}
                     <span className="spacer" />
-                    <button className="ghost-button" type="button" onClick={onClose}>
+                    <button className="btn btn-secondary" type="button" onClick={onClose}>
                         Cancel
                     </button>
-                    <button className="primary-button compact" type="submit" disabled={busy}>
+                    <button className="btn btn-primary" type="submit" disabled={busy}>
                         {busy ? 'Saving…' : event ? 'Save event' : 'Create event'}
                     </button>
                 </div>

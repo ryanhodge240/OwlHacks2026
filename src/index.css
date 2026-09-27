@@ -1,17 +1,90 @@
+/*
+ * Beacon global styles.
+ * The one place for colours, the font, resets and the controls every page shares
+ * (buttons, inputs, the brand mark, the theme switch). Page layouts live in
+ * App.css (login) and Dashboard.css (dashboard); components keep their own files.
+ */
+
+/* @import must come before every other rule, or the browser ignores it */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap');
+
+/* ---------- Colour tokens ---------- */
+
+:root {
+    color-scheme: light;
+
+    --red: #7e0002; /* buttons, table headers */
+    --red-hover: #9c0003;
+    --on-red: #fff;
+    --accent-text: #7e0002; /* red used for text: active tab, "light." */
+    --highlight: #f6e5e5; /* a row that is previewing an alert */
+
+    --bg: #fff;
+    --surface: #fff; /* inputs, table rows, dialogs */
+    --panel: #d9d9d9; /* filter bar, empty table area */
+    --panel-strong: #b3b3b3; /* login form side */
+    --art-bg: #fff; /* behind the login illustration */
+
+    --ink: #111;
+    --muted: #555;
+    --line: #111;
+    --focus: #7e0002;
+    --shadow: rgba(0, 0, 0, 0.25);
+
+    --border: 2px solid var(--line);
+    --radius: 0.45rem;
+    --gutter: clamp(1.25rem, 3vw, 2.5rem);
+    --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23111' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 9l7 7 7-7'/%3E%3C/svg%3E");
+}
+
+:root[data-theme='dark'] {
+    color-scheme: dark;
+
+    --red: #7e0002;
+    --red-hover: #a10004;
+    --on-red: #fff;
+    --accent-text: #ff7d7d; /* the brand red is too dark to read on black */
+    --highlight: #3a1717;
+
+    --bg: #141414;
+    --surface: #1e1e1e;
+    --panel: #2a2a2a;
+    --panel-strong: #232323;
+    --art-bg: #fff; /* keep white if the GIF has a white background */
+
+    --ink: #f2f2f2;
+    --muted: #a9a9a9;
+    --line: #5e5e5e;
+    --focus: #ff7d7d;
+    --shadow: rgba(0, 0, 0, 0.6);
+    --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23f2f2f2' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 9l7 7 7-7'/%3E%3C/svg%3E");
+}
+
+/* ---------- Base ---------- */
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
 html {
     min-width: 320px;
 }
 
 body {
     margin: 0;
-    background: #171a18;
-    color: #f5f1e9;
-    font-family: 'Avenir Next', Avenir, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Outfit', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
 }
 
-* {
-    box-sizing: border-box;
+h1,
+h2,
+h3,
+p {
+    margin: 0;
 }
 
 a {
@@ -19,9 +92,231 @@ a {
     text-decoration: none;
 }
 
-button:focus-visible,
-input:focus-visible,
-a:focus-visible {
-    outline: 2px solid #d8f36b;
-    outline-offset: 3px;
+img {
+    max-width: 100%;
+}
+
+button,
+input,
+select,
+textarea {
+    font: inherit;
+    color: inherit;
+}
+
+button {
+    cursor: pointer;
+}
+
+button:disabled {
+    cursor: not-allowed;
+}
+
+:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+}
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}
+
+.loading-screen {
+    display: grid;
+    min-height: 100dvh;
+    place-items: center;
+    font-weight: 600;
+}
+
+/* ---------- Brand mark (logo + name) ---------- */
+
+.brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 1.35rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+}
+
+.brand img {
+    width: 2.5rem;
+    height: 2.5rem;
+    object-fit: contain;
+}
+
+/* ---------- Buttons ---------- */
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    padding: 0.55rem 1.2rem;
+    border: 0;
+    border-radius: var(--radius);
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+    transition: background-color 0.15s ease;
+}
+
+.btn:disabled {
+    opacity: 0.55;
+}
+
+.btn-primary {
+    background: var(--red);
+    color: var(--on-red);
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: var(--red-hover);
+}
+
+/* Outlined; inset shadow keeps it the same height as .btn-primary */
+.btn-secondary {
+    background: var(--surface);
+    box-shadow: inset 0 0 0 2px var(--line);
+    color: var(--ink);
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background: var(--panel);
+}
+
+.btn-danger {
+    background: transparent;
+    box-shadow: inset 0 0 0 2px var(--accent-text);
+    color: var(--accent-text);
+}
+
+.btn-danger:hover:not(:disabled) {
+    background: var(--highlight);
+}
+
+.btn-sm {
+    padding: 0.3rem 1rem;
+    font-size: 0.9rem;
+}
+
+.icon-button {
+    display: inline-grid;
+    width: 2.25rem;
+    height: 2.25rem;
+    flex: 0 0 auto;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius);
+    background: transparent;
+    font-size: 1.1rem;
+}
+
+.icon-button:hover:not(:disabled) {
+    background: var(--panel);
+}
+
+.text-button {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--accent-text);
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.text-button:hover {
+    text-decoration: underline;
+}
+
+/* ---------- Form fields ---------- */
+
+.field {
+    display: grid;
+    gap: 0.4rem;
+    align-content: start;
+}
+
+.field-label {
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.optional {
+    margin-left: 0.3rem;
+    color: var(--muted);
+    font-weight: 500;
+}
+
+.input {
+    width: 100%;
+    height: 2.75rem;
+    padding: 0 0.85rem;
+    border: var(--border);
+    border-radius: var(--radius);
+    background-color: var(--surface);
+    /* 16px stops iOS from zooming in on focus */
+    font-size: 1rem;
+}
+
+.input:focus {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+}
+
+.input::placeholder {
+    color: var(--muted);
+}
+
+select.input {
+    padding-right: 2.5rem;
+    appearance: none;
+    background-image: var(--chevron);
+    background-position: right 0.8rem center;
+    background-repeat: no-repeat;
+    background-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.field-hint {
+    color: var(--muted);
+    font-size: 0.85rem;
+    line-height: 1.45;
+}
+
+.form-error {
+    color: var(--accent-text);
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+/* ---------- Theme switch ---------- */
+
+.theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.45rem 0.75rem;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    box-shadow: inset 0 0 0 2px var(--line);
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.theme-toggle:hover {
+    background: var(--panel);
+}
+
+.theme-toggle svg {
+    font-size: 1rem;
 }

@@ -1,0 +1,160 @@
+/* Colour / brightness / pulse editor with its live preview. */
+
+.state-fields {
+    display: grid;
+    grid-template-columns: 7rem minmax(0, 1fr);
+    gap: 1.5rem;
+}
+
+.state-preview {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    align-self: start;
+    gap: 0.9rem;
+    padding: 1.4rem 0.6rem;
+    border-radius: 0.5rem;
+    background: var(--panel);
+}
+
+.state-preview p {
+    color: var(--muted);
+    font-size: 0.8rem;
+    line-height: 1.4;
+    text-align: center;
+}
+
+.state-controls {
+    display: grid;
+    gap: 1.1rem;
+    align-content: start;
+}
+
+.state-group {
+    display: grid;
+    gap: 0.5rem;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+/* Fieldsets don't lay out legends in a grid reliably, so space them by hand */
+fieldset.state-group {
+    display: block;
+}
+
+.state-group legend {
+    margin-bottom: 0.5rem;
+    padding: 0;
+}
+
+.segmented + .inline-number {
+    margin-top: 0.7rem;
+}
+
+/* ---------- Colour swatches ---------- */
+
+.swatch-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.swatch {
+    position: relative;
+    width: 2.1rem;
+    height: 2.1rem;
+    padding: 0;
+    border: 2px solid transparent;
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+}
+
+.swatch.is-selected {
+    border-color: var(--ink);
+    outline: 2px solid var(--surface);
+    outline-offset: -4px;
+}
+
+.swatch-custom {
+    overflow: hidden;
+    background: conic-gradient(#ff3b30, #ffb020, #34c759, #3a86ff, #a259ff, #ff3b30);
+}
+
+.swatch-custom input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+}
+
+/* ---------- Brightness ---------- */
+
+.range-row {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+}
+
+.range-row input {
+    flex: 1;
+    accent-color: var(--red);
+}
+
+.range-row output {
+    min-width: 3rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-align: right;
+}
+
+/* ---------- Pulse ---------- */
+
+/* Four equal buttons on one row */
+.segmented {
+    display: grid;
+    max-width: 22rem;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    padding: 0.2rem;
+    border-radius: var(--radius);
+    background: var(--panel);
+}
+
+.segmented button {
+    padding: 0.4rem 0.25rem;
+    border: 0;
+    border-radius: 0.3rem;
+    background: transparent;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.segmented button[aria-pressed='true'] {
+    background: var(--red);
+    color: var(--on-red);
+}
+
+.inline-number {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.9rem;
+}
+
+.inline-number .input {
+    width: 6.5rem;
+    height: 2.4rem;
+}
+
+@media (max-width: 480px) {
+    .state-fields {
+        grid-template-columns: 1fr;
+    }
+
+    .state-preview {
+        flex-direction: row;
+        justify-content: center;
+    }
+}

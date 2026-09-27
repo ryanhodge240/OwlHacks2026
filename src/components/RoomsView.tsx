@@ -1,136 +1,194 @@
-import React, { FormEvent, useState } from 'react';
-import { FiCheck, FiEdit2, FiHome, FiTrash2, FiX } from 'react-icons/fi';
+import { FormEvent, useMemo, useState } from 'react';
+import { FiPlus } from 'react-icons/fi';
 import { api } from '../api';
 import { Room } from '../types';
+import Dialog from './Dialog';
 import Icon from './Icon';
 
 type Props = { rooms: Room[]; onChanged: () => Promise<void> };
 
 export default function RoomsView({ rooms, onChanged }: Props) {
-    const [name, setName] = useState('');
-    const [renaming, setRenaming] = useState<{ id: number; name: string } | null>(null);
-    const [error, setError] = useState('');
+    const [query, setQuery] = useState('');
+    const [editing, setEditing] = useState<Room | 'new' | null>(null);
 
-    const attempt = async (action: () => Promise<unknown>) => {
+    const shown = useMemo(() => {
+        const text = query.trim().toLowerCase();
+        return rooms.filter((room) => !text || room.name.toLowerCase().includes(text));
+    }, [rooms, query]);
+
+    return (
+        <section aria-label="Rooms">
+            <div className="toolbar">
+                <div className="field">
+                    <label className="field-label" htmlFor="room-filter-name">
+                        Room Name
+                    </label>
+                    <input
+                        id="room-filter-name"
+                        className="input"
+                        type="search"
+                        value={query}
+                        onChange={(event) => setQuery(event.target.value)}
+                    />
+                </div>
+                <button className="btn btn-primary toolbar-add" type="button" onClick={() => setEditing('new')}>
+                    New Room <Icon icon={FiPlus} />
+                </button>
+            </div>
+
+            <div className="table-frame">
+                <table className="data-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Name</th>
+                            <th scope="col">Devices</th>
+                            <th scope="col" className="col-actions">
+                                <span className="visually-hidden">Actions</span>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {shown.map((room) => (
+                            <tr key={room.id}>
+                                <td>
+                                    <strong>{room.name}</strong>
+                                </td>
+                                <td>
+                                    {room.deviceCount === 0 ? (
+                                        <span className="cell-muted">No devices</span>
+                                    ) : (
+                                        `${room.deviceCount} ${room.deviceCount === 1 ? 'device' : 'devices'}`
+                                    )}
+                                </td>
+                                <td className="col-actions">
+                                    <button
+                                        className="btn btn-primary btn-sm"
+                                        type="button"
+                                        onClick={() => setEditing(room)}
+                                    >
+                                        Edit
+                                    </button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+
+                {shown.length === 0 &&
+                    (query ? (
+                        <div className="table-empty">
+                            <h3>No rooms match</h3>
+                            <p>Try a different name.</p>
+                            <button className="btn btn-secondary btn-sm" type="button" onClick={() => setQuery('')}>
+                                Clear filter
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="table-empty">
+                            <h3>No rooms yet</h3>
+                            <p>Add the rooms in your home, or create one while adding a device.</p>
+                            <button className="btn btn-primary" type="button" onClick={() => setEditing('new')}>
+                                Add a room
+                            </button>
+                        </div>
+                    ))}
+            </div>
+
+            {editing && (
+                <RoomDialog
+                    room={editing === 'new' ? null : editing}
+                    onClose={() => setEditing(null)}
+                    onSaved={async () => {
+                        setEditing(null);
+                        await onChanged();
+                    }}
+                />
+            )}
+        </section>
+    );
+}
+
+function RoomDialog({
+    room,
+    onClose,
+    onSaved,
+}: {
+    room: Room | null;
+    onClose: () => void;
+    onSaved: () => Promise<void>;
+}) {
+    const [name, setName] = useState(room?.name ?? '');
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState('');
+    const hasDevices = Boolean(room && room.deviceCount > 0);
+
+    const run = async (action: () => Promise<unknown>) => {
+        setBusy(true);
         setError('');
         try {
             await action();
-            await onChanged();
-            return true;
+            await onSaved();
         } catch (caught) {
             setError(caught instanceof Error ? caught.message : 'Something went wrong.');
-            return false;
+            setBusy(false);
         }
     };
 
-    const add = async (event: FormEvent<HTMLFormElement>) => {
+    const submit = (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
-        if (await attempt(() => api.createRoom(name))) setName('');
+        run(() => (room ? api.renameRoom(room.id, name) : api.createRoom(name)));
     };
 
     return (
-        <section aria-labelledby="rooms-heading">
-            <div className="view-head">
-                <div>
-                    <h1 id="rooms-heading">Rooms</h1>
-                    <p>Rooms group your devices. A room can be deleted once it has no devices in it.</p>
+        <Dialog title={room ? 'Edit room' : 'New room'} onClose={onClose}>
+            <form className="dialog-form" onSubmit={submit}>
+                <div className="field">
+                    <label className="field-label" htmlFor="room-name">
+                        Name
+                    </label>
+                    <input
+                        id="room-name"
+                        className="input"
+                        value={name}
+                        onChange={(event) => setName(event.target.value)}
+                        maxLength={150}
+                        required
+                        placeholder="Kitchen"
+                    />
                 </div>
-            </div>
 
-            <form className="inline-form" onSubmit={add}>
-                <label htmlFor="room-name" className="visually-hidden">
-                    Room name
-                </label>
-                <input
-                    id="room-name"
-                    value={name}
-                    onChange={(event) => setName(event.target.value)}
-                    maxLength={150}
-                    required
-                    placeholder="Kitchen"
-                />
-                <button className="primary-button compact" type="submit">
-                    Add room
-                </button>
+                {hasDevices && (
+                    <p className="field-hint">
+                        This room has {room?.deviceCount} {room?.deviceCount === 1 ? 'device' : 'devices'}. Move or
+                        remove them before deleting the room.
+                    </p>
+                )}
+
+                {error && (
+                    <p className="form-error" role="alert">
+                        {error}
+                    </p>
+                )}
+                <div className="dialog-actions">
+                    {room && (
+                        <button
+                            className="btn btn-danger"
+                            type="button"
+                            disabled={busy || hasDevices}
+                            onClick={() => run(() => api.deleteRoom(room.id))}
+                        >
+                            Delete room
+                        </button>
+                    )}
+                    <span className="spacer" />
+                    <button className="btn btn-secondary" type="button" onClick={onClose}>
+                        Cancel
+                    </button>
+                    <button className="btn btn-primary" type="submit" disabled={busy}>
+                        {busy ? 'Saving…' : room ? 'Save' : 'Add room'}
+                    </button>
+                </div>
             </form>
-
-            {error && (
-                <p className="form-error" role="alert">
-                    {error}
-                </p>
-            )}
-
-            {rooms.length === 0 ? (
-                <div className="empty-state">
-                    <span className="empty-icon">
-                        <Icon icon={FiHome} />
-                    </span>
-                    <h3>No rooms yet</h3>
-                    <p>Add the rooms in your home, or create one while adding a device.</p>
-                </div>
-            ) : (
-                <ul className="room-list">
-                    {rooms.map((room) => (
-                        <li key={room.id}>
-                            {renaming?.id === room.id ? (
-                                <form
-                                    className="rename-form"
-                                    onSubmit={async (event) => {
-                                        event.preventDefault();
-                                        if (await attempt(() => api.renameRoom(room.id, renaming.name)))
-                                            setRenaming(null);
-                                    }}
-                                >
-                                    <input
-                                        aria-label={`New name for ${room.name}`}
-                                        value={renaming.name}
-                                        onChange={(event) => setRenaming({ id: room.id, name: event.target.value })}
-                                        autoFocus
-                                        required
-                                        maxLength={150}
-                                    />
-                                    <button className="icon-button" type="submit" aria-label="Save name">
-                                        <Icon icon={FiCheck} />
-                                    </button>
-                                    <button
-                                        className="icon-button"
-                                        type="button"
-                                        aria-label="Cancel rename"
-                                        onClick={() => setRenaming(null)}
-                                    >
-                                        <Icon icon={FiX} />
-                                    </button>
-                                </form>
-                            ) : (
-                                <>
-                                    <span className="room-list-name">{room.name}</span>
-                                    <span className="room-list-count">
-                                        {room.deviceCount} {room.deviceCount === 1 ? 'device' : 'devices'}
-                                    </span>
-                                    <button
-                                        className="icon-button"
-                                        type="button"
-                                        aria-label={`Rename ${room.name}`}
-                                        onClick={() => setRenaming({ id: room.id, name: room.name })}
-                                    >
-                                        <Icon icon={FiEdit2} />
-                                    </button>
-                                    <button
-                                        className="icon-button"
-                                        type="button"
-                                        aria-label={`Delete ${room.name}`}
-                                        disabled={room.deviceCount > 0}
-                                        title={room.deviceCount > 0 ? 'Move or remove its devices first' : undefined}
-                                        onClick={() => attempt(() => api.deleteRoom(room.id))}
-                                    >
-                                        <Icon icon={FiTrash2} />
-                                    </button>
-                                </>
-                            )}
-                        </li>
-                    ))}
-                </ul>
-            )}
-        </section>
+        </Dialog>
     );
 }

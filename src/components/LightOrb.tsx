@@ -1,5 +1,6 @@
-import React, { CSSProperties } from 'react';
+import { CSSProperties } from 'react';
 import { LightDraft, LightState } from '../types';
+import './LightOrb.css';
 
 type Props = {
     state: LightState | LightDraft | null;

@@ -60,9 +60,6 @@ function parseName(value, field, { min = 1, max = 150 } = {}) {
 function parseHardwareId(value) {
     if (value === undefined || value === null || String(value).trim() === '') return null;
     const id = String(value).trim();
-    if (!/^[a-zA-Z0-9_-]{2,64}$/.test(id)) {
-        return fail(400, 'Hardware ID must be 2-64 letters, numbers, hyphens, or underscores.');
-    }
     return id;
 }
 

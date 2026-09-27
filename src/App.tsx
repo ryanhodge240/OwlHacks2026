@@ -1,7 +1,8 @@
-import React, { FormEvent, useEffect, useState } from 'react';
-import { FiBell, FiShield } from 'react-icons/fi';
-import BeaconLogo from './img/beacon-logo.png';
+import { FormEvent, useEffect, useState } from 'react';
+import PhoneRingGif from './img/phone_ring.gif';
+import BeaconLogo from './img/beacon-logo-clear.png';
 import Dashboard from './Dashboard';
+import ThemeToggle from './components/ThemeToggle';
 import { User } from './types';
 import './App.css';
 
@@ -55,51 +56,43 @@ function App() {
         return <div className="loading-screen">Loading your signal space...</div>;
     }
 
-    if (!user) {
-        return (
-            <main className="auth-page">
-                <div className="auth-visual">
-                    <div className="brand-lockup">
-                        <span className="brand-mark">
-                            <img src={BeaconLogo} alt="Lamp with lighting room" />
-                        </span>
-                        <span>Beacon</span>
-                    </div>
-                    <div className="visual-copy">
-                        <p className="kicker">Technology that speaks in light</p>
-                        <h1>
-                            Never miss
-                            <br />
-                            <em>the moment.</em>
-                        </h1>
-                        <p>
-                            Beacon turns the sounds around you into clear, visible signals. A calmer way to stay
-                            connected.
-                        </p>
-                    </div>
-                    <div className="signal-art" aria-hidden="true">
-                        <span className="signal-ring ring-one" />
-                        <span className="signal-ring ring-two" />
-                        <span className="signal-ring ring-three" />
-                        <span className="signal-core">
-                            {React.createElement(FiBell as unknown as React.ElementType)}
-                        </span>
-                    </div>
-                    <p className="visual-footnote">Designed for deaf and hard-of-hearing communities.</p>
+    if (user) {
+        return <Dashboard user={user} onLogout={logout} />;
+    }
+
+    return (
+        <main className="auth-page">
+            <div className="auth-art">
+                <div className="brand">
+                    <img src={BeaconLogo} alt="" />
+                    <span>Beacon</span>
                 </div>
-                <section className="auth-panel" aria-labelledby="auth-title">
-                    <div className="auth-panel-inner">
-                        <p className="panel-overline">Your personal signal system</p>
-                        <h2 id="auth-title">{authMode === 'login' ? 'Welcome back.' : 'Create your space.'}</h2>
-                        <p className="auth-intro">
-                            {authMode === 'login'
-                                ? 'Sign in to manage your smart lights and alerts.'
-                                : 'Start building a home that keeps you in the know.'}
-                        </p>
-                        <form className="auth-form" onSubmit={submitAuth}>
-                            <label htmlFor="username">Username</label>
+                <div className="auth-illustration">
+                    <img src={PhoneRingGif} alt="A ringing phone lighting up a lamp" />
+                </div>
+            </div>
+
+            <section className="auth-panel" aria-labelledby="auth-title">
+                <ThemeToggle className="auth-theme-toggle" />
+
+                <div className="auth-panel-inner">
+                    <h1 id="auth-title" className="auth-title">
+                        Hear it in <span>light</span>.
+                    </h1>
+                    <p className="auth-tagline">Turn doorbells, alarms, and calls into colored light.</p>
+
+                    <h2 className="auth-prompt">
+                        {authMode === 'login' ? 'Login or create an account below:' : 'Create your account below:'}
+                    </h2>
+
+                    <form className="auth-form" onSubmit={submitAuth}>
+                        <div className="field">
+                            <label className="field-label" htmlFor="username">
+                                Username
+                            </label>
                             <input
                                 id="username"
+                                className="input"
                                 value={username}
                                 onChange={(event) => setUsername(event.target.value)}
                                 minLength={3}
@@ -107,11 +100,16 @@ function App() {
                                 pattern="[a-zA-Z0-9_]+"
                                 required
                                 autoComplete="username"
-                                placeholder="your_username"
                             />
-                            <label htmlFor="password">Password</label>
+                        </div>
+
+                        <div className="field">
+                            <label className="field-label" htmlFor="password">
+                                Password
+                            </label>
                             <input
                                 id="password"
+                                className="input"
                                 type="password"
                                 value={password}
                                 onChange={(event) => setPassword(event.target.value)}
@@ -119,41 +117,34 @@ function App() {
                                 maxLength={128}
                                 required
                                 autoComplete={authMode === 'login' ? 'current-password' : 'new-password'}
-                                placeholder="At least 8 characters"
                             />
-                            {authError && (
-                                <p className="form-error" role="alert">
-                                    {authError}
-                                </p>
-                            )}
-                            <button className="primary-button" type="submit" disabled={authBusy}>
-                                {authBusy ? 'Please wait...' : authMode === 'login' ? 'Sign in' : 'Create account'}
-                                <span>→</span>
-                            </button>
-                        </form>
+                        </div>
+
                         <button
-                            className="mode-switch"
+                            className="auth-switch"
                             type="button"
                             onClick={() => {
                                 setAuthMode(authMode === 'login' ? 'register' : 'login');
                                 setAuthError('');
                             }}
                         >
-                            {authMode === 'login'
-                                ? 'New to Beacon? Create an account'
-                                : 'Already have an account? Sign in'}
+                            {authMode === 'login' ? 'New? Create account' : 'Have an account? Login'} →
                         </button>
-                        <div className="trust-note">
-                            {React.createElement(FiShield as unknown as React.ElementType)} Your account is private and
-                            secure.
-                        </div>
-                    </div>
-                </section>
-            </main>
-        );
-    }
 
-    return <Dashboard user={user} onLogout={logout} />;
+                        {authError && (
+                            <p className="form-error" role="alert">
+                                {authError}
+                            </p>
+                        )}
+
+                        <button className="btn btn-primary auth-submit" type="submit" disabled={authBusy}>
+                            {authBusy ? 'Please wait...' : authMode === 'login' ? 'Login' : 'Create account'}
+                        </button>
+                    </form>
+                </div>
+            </section>
+        </main>
+    );
 }
 
 export default App;
