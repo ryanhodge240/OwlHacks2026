@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import App from '../App';
 
 const response = (body: unknown, ok = true) => Promise.resolve({ ok, status: 200, json: async () => body });
@@ -41,9 +41,9 @@ test('renders the Beacon sign-in experience', async () => {
 
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: /welcome back/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /hear it in light/i })).toBeInTheDocument();
     expect(screen.getByLabelText('Username')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Login' })).toBeInTheDocument();
 });
 
 test('shows each light with its default state and the color it changes to for an event', async () => {
@@ -60,9 +60,10 @@ test('shows each light with its default state and the color it changes to for an
 
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: 'Devices' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Connected Devices' })).toBeInTheDocument();
     expect(await screen.findByText('Bedroom lamp')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
     expect(screen.getByText('beacon-001')).toBeInTheDocument();
-    expect(screen.getByText(/#FFD9A0, 60%, steady/)).toBeInTheDocument();
+    expect(screen.getByText(/#FFD9A0, 60% brightness, steady/)).toBeInTheDocument();
     expect(screen.getByText(/#3A86FF, 100%, pulses every 800 ms, for 10 s/)).toBeInTheDocument();
 });
