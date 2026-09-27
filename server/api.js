@@ -101,6 +101,13 @@ async function callHomeAssistant(entityId, state) {
     const token = process.env.HOME_ASSISTANT_KEY;
     if (!url || !token) fail(503, 'Home Assistant integration is not configured.');
 
+    logEvent('matter_api_request', {
+        level: 'debug',
+        method: 'POST',
+        route: '/api/services/light/turn_on',
+        entityId,
+    });
+
     const response = await fetch(`${url}/api/services/light/turn_on`, {
         method: 'POST',
         headers: {
@@ -124,6 +131,13 @@ async function turnOffHomeAssistant(entityId) {
     const url = homeAssistantUrl();
     const token = process.env.HOME_ASSISTANT_KEY;
     if (!url || !token) fail(503, 'Home Assistant integration is not configured.');
+
+    logEvent('matter_api_request', {
+        level: 'debug',
+        method: 'POST',
+        route: '/api/services/light/turn_off',
+        entityId,
+    });
 
     const response = await fetch(`${url}/api/services/light/turn_off`, {
         method: 'POST',
