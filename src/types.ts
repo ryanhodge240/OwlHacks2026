@@ -6,7 +6,7 @@ export type LightState = {
     color: number;
     colorHex: string;
     brightness: number;
-    /** Length of one pulse cycle in milliseconds. 0 is a steady light. */
+    /** Length of one pulse cycle in milliseconds. 0 is a solid light. */
     pulse: number;
 };
 

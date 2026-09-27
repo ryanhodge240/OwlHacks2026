@@ -3,6 +3,7 @@ import { FiPlus } from 'react-icons/fi';
 import { api } from '../api';
 import { describeLength, describePulse } from '../lightFormat';
 import { BeaconEvent, Device, LightDraft, Meta } from '../types';
+import ConfirmDialog from './ConfirmDialog';
 import Dialog from './Dialog';
 import Icon from './Icon';
 import LightOrb from './LightOrb';
@@ -18,7 +19,6 @@ export default function EventsView({ meta, events, devices, onChanged }: Props) 
 
     const lights = devices.filter((device) => device.type === 'light');
     const lightName = (id: number) => lights.find((light) => light.id === id)?.name ?? 'Removed light';
-    const titleOf = (event: BeaconEvent) => event.name || event.triggerLabel;
 
     const shown = useMemo(() => {
         const text = query.trim().toLowerCase();
@@ -110,7 +110,7 @@ export default function EventsView({ meta, events, devices, onChanged }: Props) 
                                 <td>
                                     <div className="cell-main">
                                         <LightOrb state={event} size="small" />
-                                        <strong>{titleOf(event)}</strong>
+                                        <strong>{event.name || event.triggerLabel}</strong>
                                     </div>
                                 </td>
                                 <td>{event.triggerLabel}</td>
@@ -199,6 +199,7 @@ function EventDialog({
             : { colorHex: '#ff3b30', brightness: 100, pulse: 800 },
     );
     const [deviceIds, setDeviceIds] = useState<number[]>(event?.deviceIds ?? lights.map((light) => light.id));
+    const [confirmingDelete, setConfirmingDelete] = useState(false);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
 
@@ -221,7 +222,7 @@ function EventDialog({
     };
 
     const remove = async () => {
-        if (!event || !window.confirm(`Delete ${event.name || event.triggerLabel}?`)) return;
+        if (!event) return;
         setBusy(true);
         setError('');
         try {
@@ -319,14 +320,19 @@ function EventDialog({
                     </div>
                 </div>
 
-                {error && (
+                {error && !confirmingDelete && (
                     <p className="form-error" role="alert">
                         {error}
                     </p>
                 )}
                 <div className="dialog-actions">
                     {event && (
-                        <button className="btn btn-danger" type="button" onClick={remove} disabled={busy}>
+                        <button
+                            className="btn btn-danger"
+                            type="button"
+                            onClick={() => setConfirmingDelete(true)}
+                            disabled={busy}
+                        >
                             Delete event
                         </button>
                     )}
@@ -339,6 +345,27 @@ function EventDialog({
                     </button>
                 </div>
             </form>
+
+            {event && confirmingDelete && (
+                <ConfirmDialog
+                    title="Delete event?"
+                    message={
+                        <>
+                            Are you sure you want to delete <strong>{event.name || event.triggerLabel}</strong>? Lights
+                            will stop reacting to it.
+                        </>
+                    }
+                    confirmLabel="Delete"
+                    busyLabel="Deleting…"
+                    busy={busy}
+                    error={error}
+                    onConfirm={remove}
+                    onCancel={() => {
+                        setConfirmingDelete(false);
+                        setError('');
+                    }}
+                />
+            )}
         </Dialog>
     );
 }

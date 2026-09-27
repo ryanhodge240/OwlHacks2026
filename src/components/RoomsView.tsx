@@ -2,6 +2,7 @@ import { FormEvent, useMemo, useState } from 'react';
 import { FiPlus } from 'react-icons/fi';
 import { api } from '../api';
 import { Room } from '../types';
+import ConfirmDialog from './ConfirmDialog';
 import Dialog from './Dialog';
 import Icon from './Icon';
 
@@ -118,6 +119,7 @@ function RoomDialog({
     onSaved: () => Promise<void>;
 }) {
     const [name, setName] = useState(room?.name ?? '');
+    const [confirmingDelete, setConfirmingDelete] = useState(false);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
     const hasDevices = Boolean(room && room.deviceCount > 0);
@@ -164,7 +166,7 @@ function RoomDialog({
                     </p>
                 )}
 
-                {error && (
+                {error && !confirmingDelete && (
                     <p className="form-error" role="alert">
                         {error}
                     </p>
@@ -175,7 +177,7 @@ function RoomDialog({
                             className="btn btn-danger"
                             type="button"
                             disabled={busy || hasDevices}
-                            onClick={() => run(() => api.deleteRoom(room.id))}
+                            onClick={() => setConfirmingDelete(true)}
                         >
                             Delete room
                         </button>
@@ -189,6 +191,26 @@ function RoomDialog({
                     </button>
                 </div>
             </form>
+
+            {room && confirmingDelete && (
+                <ConfirmDialog
+                    title="Delete room?"
+                    message={
+                        <>
+                            Are you sure you want to delete <strong>{room.name}</strong>?
+                        </>
+                    }
+                    confirmLabel="Delete"
+                    busyLabel="Deleting…"
+                    busy={busy}
+                    error={error}
+                    onConfirm={() => run(() => api.deleteRoom(room.id))}
+                    onCancel={() => {
+                        setConfirmingDelete(false);
+                        setError('');
+                    }}
+                />
+            )}
         </Dialog>
     );
 }

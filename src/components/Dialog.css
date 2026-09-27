@@ -25,6 +25,16 @@
     width: min(100%, 50rem);
 }
 
+/* "Are you sure?" pop-ups */
+.dialog.dialog-small {
+    width: min(100%, 24rem);
+}
+
+.confirm-message strong {
+    color: var(--ink);
+    font-weight: 700;
+}
+
 .dialog-head {
     display: flex;
     align-items: center;

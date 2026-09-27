@@ -5,7 +5,7 @@ const crypto = require('node:crypto');
 // Limits shared by validation and the frontend (exposed through /api/meta).
 const LIMITS = {
     brightness: { min: 0, max: 100 },
-    // Pulse is the length of one on/off cycle in milliseconds. 0 means a steady light.
+    // Pulse is the length of one on/off cycle in milliseconds. 0 means a solid light.
     pulse: { min: 0, max: 10000 },
     // How long an event keeps the light in its alert state, in seconds.
     eventLength: { min: 1, max: 3600 },
