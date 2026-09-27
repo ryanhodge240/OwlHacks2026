@@ -1,7 +1,5 @@
 import { ReactNode, useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { FiX } from 'react-icons/fi';
-import Icon from './Icon';
 import './Dialog.css';
 
 type Props = { title: string; onClose: () => void; children: ReactNode; wide?: boolean; small?: boolean };

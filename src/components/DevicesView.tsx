@@ -369,6 +369,9 @@ function LightSettingsDialog({
                     {isNew ? `${device.name} was added to ${device.room.name}. ` : `Light in ${device.room.name}. `}
                     Choose how it looks day to day, and which sounds make it flash.
                 </p>
+                <p className="field-hint">
+                    Hardware ID: <span>{device.hardwareId ?? 'Not set'}</span>
+                </p>
 
                 {/* ---- 1. Everyday look ---- */}
                 <section className="settings-step" aria-labelledby="step-look">
@@ -410,6 +413,10 @@ function LightSettingsDialog({
                                 idPrefix="everyday"
                                 showPulse={false}
                             />
+                            <p className="field-hint">
+                                {look.colorHex.toUpperCase()}, {look.brightness}%,{' '}
+                                {describePulse(look.pulse).toLowerCase()}
+                            </p>
                         </div>
                     )}
                 </section>
@@ -450,7 +457,8 @@ function LightSettingsDialog({
                                                 <strong>{event.name || event.triggerLabel}</strong>
                                                 <small>
                                                     {event.name ? `${event.triggerLabel} · ` : ''}
-                                                    {describePulse(event.pulse)}, for{' '}
+                                                    {event.colorHex.toUpperCase()}, {event.brightness}%,{' '}
+                                                    {describePulse(event.pulse).toLowerCase()}, for{' '}
                                                     {describeLength(event.eventLength)}
                                                 </small>
                                             </span>
