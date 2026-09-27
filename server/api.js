@@ -314,8 +314,7 @@ async function withTransaction(pool, work) {
 /* ---------- routes ---------- */
 
 function registerApi(app, { pool, currentUser }) {
-    const triggerTimers = new Map();
-    const triggerGenerations = new Map();
+    const triggerRuns = new Map();
 
     // Latest saved default for a light, read fresh from the database.
     async function currentDefaultState(deviceId) {
@@ -331,7 +330,7 @@ function registerApi(app, { pool, currentUser }) {
     // switches to the newest default when it ends.
     async function applyDefaultState(device) {
         if (!device.hardwareId) return { status: 'skipped', reason: 'no_hardware_id' };
-        if (triggerTimers.has(device.hardwareId)) return { status: 'deferred', reason: 'alert_active' };
+        if (triggerRuns.has(device.hardwareId)) return { status: 'deferred', reason: 'alert_active' };
 
         try {
             if (device.defaultState) await callHomeAssistant(device.hardwareId, device.defaultState);
@@ -341,6 +340,87 @@ function registerApi(app, { pool, currentUser }) {
             console.error(error);
             return { status: 'failed', reason: error.message };
         }
+    }
+
+    function cancelTriggerRun(hardwareId) {
+        const run = triggerRuns.get(hardwareId);
+        if (!run) return;
+
+        run.cancelled = true;
+        if (run.pulseTimer) clearTimeout(run.pulseTimer);
+        if (run.expiryTimer) clearTimeout(run.expiryTimer);
+        triggerRuns.delete(hardwareId);
+    }
+
+    async function startTriggerRun(command) {
+        cancelTriggerRun(command.hardwareId);
+
+        const run = { cancelled: false, pulseTimer: null, expiryTimer: null, pending: Promise.resolve() };
+        triggerRuns.set(command.hardwareId, run);
+        const isCurrent = () => triggerRuns.get(command.hardwareId) === run && !run.cancelled;
+
+        try {
+            await callHomeAssistant(command.hardwareId, command.alertState);
+        } catch (error) {
+            if (isCurrent()) {
+                triggerRuns.delete(command.hardwareId);
+            }
+            throw error;
+        }
+
+        if (!isCurrent()) return;
+
+        if (command.alertState.pulse > 0) {
+            const halfCycle = Math.max(1, Math.floor(command.alertState.pulse / 2));
+            const schedulePulse = (turnOn) => {
+                if (!isCurrent()) return;
+
+                run.pulseTimer = setTimeout(async () => {
+                    run.pulseTimer = null;
+                    if (!isCurrent()) return;
+
+                    run.pending = run.pending.then(async () => {
+                        if (!isCurrent()) return;
+                        try {
+                            if (turnOn) await callHomeAssistant(command.hardwareId, command.alertState);
+                            else await turnOffHomeAssistant(command.hardwareId);
+                        } catch (error) {
+                            console.error(error);
+                        }
+                    });
+                    await run.pending;
+
+                    schedulePulse(!turnOn);
+                }, halfCycle);
+            };
+
+            // The initial call above starts the light on; the first scheduled action turns it off.
+            schedulePulse(false);
+        }
+
+        run.expiryTimer = setTimeout(async () => {
+            if (!isCurrent()) return;
+
+            run.cancelled = true;
+            if (run.pulseTimer) clearTimeout(run.pulseTimer);
+
+            try {
+                await run.pending;
+                // Read the default again so a default changed during the alert is respected.
+                const revertTo = await currentDefaultState(command.deviceId);
+                if (revertTo) {
+                    await callHomeAssistant(command.hardwareId, revertTo);
+                } else {
+                    await turnOffHomeAssistant(command.hardwareId);
+                }
+            } catch (error) {
+                console.error(error);
+            } finally {
+                if (triggerRuns.get(command.hardwareId) === run) {
+                    triggerRuns.delete(command.hardwareId);
+                }
+            }
+        }, command.durationSeconds * 1000);
     }
 
     // Wraps a handler so it has a signed-in user and API errors become JSON responses.
@@ -745,42 +825,7 @@ function registerApi(app, { pool, currentUser }) {
                 const commandsByHardwareId = new Map();
                 for (const command of commands) commandsByHardwareId.set(command.hardwareId, command);
 
-                await Promise.all(
-                    [...commandsByHardwareId.values()].map(async (command) => {
-                        const previousTimer = triggerTimers.get(command.hardwareId);
-                        if (previousTimer) clearTimeout(previousTimer);
-                        const generation = (triggerGenerations.get(command.hardwareId) || 0) + 1;
-                        triggerGenerations.set(command.hardwareId, generation);
-
-                        await callHomeAssistant(command.hardwareId, command.alertState);
-                        if (triggerGenerations.get(command.hardwareId) !== generation) return;
-
-                        const timer = setTimeout(async () => {
-                            if (
-                                triggerTimers.get(command.hardwareId) !== timer ||
-                                triggerGenerations.get(command.hardwareId) !== generation
-                            )
-                                return;
-                            try {
-                                // Read the default again so a default changed during the alert is respected.
-                                const revertTo = await currentDefaultState(command.deviceId);
-                                if (revertTo) {
-                                    await callHomeAssistant(command.hardwareId, revertTo);
-                                } else {
-                                    await turnOffHomeAssistant(command.hardwareId);
-                                }
-                            } catch (error) {
-                                console.error(error);
-                            } finally {
-                                if (triggerTimers.get(command.hardwareId) === timer) {
-                                    triggerTimers.delete(command.hardwareId);
-                                    triggerGenerations.delete(command.hardwareId);
-                                }
-                            }
-                        }, command.durationSeconds * 1000);
-                        triggerTimers.set(command.hardwareId, timer);
-                    }),
-                );
+                await Promise.all([...commandsByHardwareId.values()].map((command) => startTriggerRun(command)));
 
                 logEvent('trigger_executed', {
                     userId: user?.id || null,
