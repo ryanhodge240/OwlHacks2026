@@ -154,6 +154,36 @@ async function turnOffHomeAssistant(entityId) {
     }
 }
 
+async function listHomeAssistantLights() {
+    const url = homeAssistantUrl();
+    const token = process.env.HOME_ASSISTANT_KEY;
+    if (!url || !token) fail(503, 'Home Assistant integration is not configured.');
+
+    let response;
+    try {
+        response = await fetch(`${url}/api/states`, {
+            headers: { Authorization: `Bearer ${token}` },
+        });
+    } catch (_error) {
+        fail(503, 'Could not reach Home Assistant.');
+    }
+
+    if (!response.ok) {
+        fail(503, `Home Assistant rejected the request (${response.status}).`);
+    }
+
+    const states = await response.json().catch(() => null);
+    if (!Array.isArray(states)) fail(503, 'Home Assistant returned an invalid light list.');
+
+    return states
+        .filter((state) => typeof state?.entity_id === 'string' && state.entity_id.startsWith('light.'))
+        .map((state) => ({
+            entityId: state.entity_id,
+            name: String(state.attributes?.friendly_name || state.entity_id),
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+}
+
 function publicRoom(row) {
     return { id: Number(row.id), name: row.name, deviceCount: Number(row.device_count || 0) };
 }
@@ -403,6 +433,11 @@ function registerApi(app, { pool, currentUser }) {
     app.get(
         '/api/devices',
         route(async (_request, response, user) => response.json({ devices: await loadDevices(pool, user.id) })),
+    );
+
+    app.get(
+        '/api/home-assistant/lights',
+        route(async (_request, response) => response.json({ lights: await listHomeAssistantLights() })),
     );
 
     app.get(

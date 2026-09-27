@@ -1,9 +1,9 @@
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { FiCamera, FiMic, FiPlus, FiSpeaker, FiSun } from 'react-icons/fi';
 import { IconType } from 'react-icons';
 import { api } from '../api';
 import { describeLength, describePulse } from '../lightFormat';
-import { BeaconEvent, Device, DeviceType, LightDraft, LightState, Meta, Room } from '../types';
+import { BeaconEvent, Device, DeviceType, HomeAssistantLight, LightDraft, LightState, Meta, Room } from '../types';
 import ConfirmDialog from './ConfirmDialog';
 import Dialog from './Dialog';
 import Icon from './Icon';
@@ -179,6 +179,7 @@ export default function DevicesView({ meta, rooms, devices, events, previews, on
                 <AddDeviceDialog
                     meta={meta}
                     rooms={rooms}
+                    devices={devices}
                     onClose={() => setDialog(null)}
                     onAdded={async (device) => {
                         await onChanged();
@@ -602,11 +603,13 @@ function OtherDeviceDialog({
 function AddDeviceDialog({
     meta,
     rooms,
+    devices,
     onClose,
     onAdded,
 }: {
     meta: Meta;
     rooms: Room[];
+    devices: Device[];
     onClose: () => void;
     onAdded: (device: Device) => Promise<void>;
 }) {
@@ -615,8 +618,42 @@ function AddDeviceDialog({
     const [roomChoice, setRoomChoice] = useState(rooms[0] ? String(rooms[0].id) : NEW_ROOM);
     const [newRoom, setNewRoom] = useState('');
     const [hardwareId, setHardwareId] = useState('');
+    const [homeAssistantLights, setHomeAssistantLights] = useState<HomeAssistantLight[]>([]);
+    const [lightsBusy, setLightsBusy] = useState(true);
+    const [lightsError, setLightsError] = useState('');
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
+
+    useEffect(() => {
+        if (type !== 'light') {
+            setLightsBusy(false);
+            return;
+        }
+
+        let active = true;
+        setLightsBusy(true);
+        setLightsError('');
+        api.homeAssistantLights()
+            .then((lights) => {
+                if (active) setHomeAssistantLights(lights);
+            })
+            .catch((caught) => {
+                if (active)
+                    setLightsError(caught instanceof Error ? caught.message : 'Could not load Home Assistant lights.');
+            })
+            .finally(() => {
+                if (active) setLightsBusy(false);
+            });
+
+        return () => {
+            active = false;
+        };
+    }, [type]);
+
+    const availableLights = homeAssistantLights.filter(
+        (light) => !devices.some((device) => device.hardwareId === light.entityId),
+    );
+    const cannotSubmit = busy || (type === 'light' && (lightsBusy || Boolean(lightsError) || !hardwareId));
 
     const submit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -699,22 +736,56 @@ function AddDeviceDialog({
                     )}
                 </div>
 
-                <div className="field">
-                    <label className="field-label" htmlFor="device-hardware">
-                        Hardware ID <span className="optional">optional</span>
-                    </label>
-                    <input
-                        id="device-hardware"
-                        className="input"
-                        value={hardwareId}
-                        onChange={(event) => setHardwareId(event.target.value)}
-                        maxLength={64}
-                        placeholder="beacon-001"
-                    />
-                    <p className="field-hint">
-                        The ID the physical device reports, used when Beacon sends it commands.
-                    </p>
-                </div>
+                {type === 'light' ? (
+                    <div className="field">
+                        <label className="field-label" htmlFor="device-hardware">
+                            Home Assistant light
+                        </label>
+                        <select
+                            id="device-hardware"
+                            className="input"
+                            value={hardwareId}
+                            onChange={(event) => setHardwareId(event.target.value)}
+                            disabled={lightsBusy || Boolean(lightsError)}
+                            required
+                        >
+                            <option value="">
+                                {lightsBusy
+                                    ? 'Loading lights…'
+                                    : lightsError
+                                      ? 'Could not load lights'
+                                      : 'Select a light'}
+                            </option>
+                            {availableLights.map((light) => (
+                                <option key={light.entityId} value={light.entityId}>
+                                    {light.name} ({light.entityId})
+                                </option>
+                            ))}
+                        </select>
+                        {lightsError ? (
+                            <p className="field-hint form-error">{lightsError}</p>
+                        ) : (
+                            <p className="field-hint">Choose the Home Assistant light Beacon should control.</p>
+                        )}
+                    </div>
+                ) : (
+                    <div className="field">
+                        <label className="field-label" htmlFor="device-hardware">
+                            Hardware ID <span className="optional">optional</span>
+                        </label>
+                        <input
+                            id="device-hardware"
+                            className="input"
+                            value={hardwareId}
+                            onChange={(event) => setHardwareId(event.target.value)}
+                            maxLength={64}
+                            placeholder="beacon-001"
+                        />
+                        <p className="field-hint">
+                            The ID the physical device reports, used when Beacon sends it commands.
+                        </p>
+                    </div>
+                )}
 
                 {error && (
                     <p className="form-error" role="alert">
@@ -725,7 +796,7 @@ function AddDeviceDialog({
                     <button className="btn btn-secondary" type="button" onClick={onClose}>
                         Cancel
                     </button>
-                    <button className="btn btn-primary" type="submit" disabled={busy}>
+                    <button className="btn btn-primary" type="submit" disabled={cannotSubmit}>
                         {busy ? 'Adding…' : type === 'light' ? 'Next: set up the light' : 'Add device'}
                     </button>
                 </div>

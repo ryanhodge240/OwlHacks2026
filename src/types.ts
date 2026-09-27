@@ -32,6 +32,8 @@ export type Device = {
     events: DeviceEvent[];
 };
 
+export type HomeAssistantLight = { entityId: string; name: string };
+
 export type BeaconEvent = DeviceEvent & { deviceIds: number[] };
 
 export type Range = { min: number; max: number };

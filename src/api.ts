@@ -1,4 +1,4 @@
-import { BeaconEvent, Device, LightDraft, Meta, Room, TriggerResult } from './types';
+import { BeaconEvent, Device, HomeAssistantLight, LightDraft, Meta, Room, TriggerResult } from './types';
 
 async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
     const response = await fetch(url, {
@@ -30,6 +30,8 @@ export const api = {
     deleteRoom: (id: number) => request<void>('DELETE', `/api/rooms/${id}`),
 
     devices: () => request<{ devices: Device[] }>('GET', '/api/devices').then((data) => data.devices),
+    homeAssistantLights: () =>
+        request<{ lights: HomeAssistantLight[] }>('GET', '/api/home-assistant/lights').then((data) => data.lights),
     createDevice: (input: { name: string; type: string; roomId: number; hardwareId: string }) =>
         request<{ device: Device }>('POST', '/api/devices', input).then((data) => data.device),
     updateDevice: (id: number, input: { name?: string; roomId?: number; hardwareId?: string }) =>
